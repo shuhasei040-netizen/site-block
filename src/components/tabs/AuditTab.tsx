@@ -26,10 +26,15 @@ import {
   Laptop,
   Network,
   PlusCircle,
+  DownloadCloud,
+  Layers,
+  HardDrive,
+  ArrowDownCircle,
 } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
 import { analyzeThreatPatterns } from '../../utils/threatEngine';
 import { simulateUrlPenetrationRoute, UrlRouteSimulationReport } from '../../utils/urlRouteSimulator';
+import { simulateInboundDevicePenetration, InboundPenetrationReport } from '../../utils/inboundPenetrationSimulator';
 
 export const AuditTab: React.FC = () => {
   const {
@@ -49,6 +54,8 @@ export const AuditTab: React.FC = () => {
     requestNotificationPermission,
     applyRestriction,
     addLogEntry,
+    pwaShieldActive,
+    togglePwaSandboxShield,
   } = useSecurity();
 
   const [expandedScenarioId, setExpandedScenarioId] = useState<string | null>(null);
@@ -57,6 +64,8 @@ export const AuditTab: React.FC = () => {
   // URL指定型・通信経路侵入診断ステート
   const [targetUrlInput, setTargetUrlInput] = useState<string>('https://suspicious-external-c2.net:8443/ws');
   const [urlSimulationReport, setUrlSimulationReport] = useState<UrlRouteSimulationReport | null>(null);
+  const [inboundReport, setInboundReport] = useState<InboundPenetrationReport | null>(null);
+  const [urlDiagnosticMode, setUrlDiagnosticMode] = useState<'both' | 'outbound' | 'inbound'>('both');
   const [isSimulatingRoute, setIsSimulatingRoute] = useState<boolean>(false);
   const [urlBlockSuccessMsg, setUrlBlockSuccessMsg] = useState<string | null>(null);
 
@@ -83,9 +92,17 @@ export const AuditTab: React.FC = () => {
     setTimeout(() => {
       const report = simulateUrlPenetrationRoute(raw, sites, restrictions);
       setUrlSimulationReport(report);
+
+      const isSiteBlocked =
+        sites.some((s) => s.status === 'blocked' && (report.hostname.includes(s.url.toLowerCase()) || s.url.toLowerCase().includes(report.hostname))) ||
+        restrictions.some((r) => r.status === 'active' && `${r.title} ${r.reason}`.toLowerCase().includes(report.hostname));
+
+      const inbReport = simulateInboundDevicePenetration(raw, pwaShieldActive, isSiteBlocked);
+      setInboundReport(inbReport);
+
       setIsSimulatingRoute(false);
       addLogEntry(
-        `URL通信経路侵入診断実施: ${report.hostname} (リスクスコア: ${report.riskScore}/100, 判定: ${report.overallRouteStatus})`,
+        `URL通信経路＆インバウンド端末侵入診断実施: ${report.hostname} (経路リスク: ${report.riskScore}/100, 端末防御力: ${inbReport.overallDefensePower}/100)`,
         'AUDIT',
         report.overallRouteStatus === 'securely_blocked' ? 'success' : report.overallRouteStatus === 'monitored_safe' ? 'info' : 'warning'
       );
@@ -517,190 +534,411 @@ export const AuditTab: React.FC = () => {
         {/* Simulation Output Report */}
         {urlSimulationReport && (
           <div className="space-y-4 pt-2 border-t border-[#2a3550]">
-            {/* Visual Penetration Path Map */}
-            <div className="p-4 rounded-xl bg-[#161d2e] border border-[#2a3550] space-y-3">
-              <div className="text-xs font-bold text-white flex items-center justify-between">
-                <span>通信経路シミュレーション・フロー（端末 ➔ フィルタ ➔ 宛先）</span>
-                <span className="text-[11px] font-mono text-[#8b96b8]">
-                  Target: {urlSimulationReport.hostname} ({urlSimulationReport.protocol}//:{urlSimulationReport.port})
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                {/* Node 1: Device Layer */}
-                <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${
-                    urlSimulationReport.pathVisual.deviceLayer === 'protected'
-                      ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
-                      : 'bg-[#ff5c7a]/20 text-[#ff5c7a]'
-                  }`}>
-                    <Laptop className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-[#8b96b8]">発信元</div>
-                    <div className="text-xs font-bold text-white">ローカル端末 / PWA</div>
-                    <div className="text-[10px] mt-0.5 text-[#3ddc97]">サンドボックス稼働中</div>
-                  </div>
-                </div>
-
-                {/* Node 2: Filter Layer */}
-                <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3 relative">
-                  <div className={`p-2 rounded-lg ${
-                    urlSimulationReport.pathVisual.filterLayer === 'dropped'
-                      ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
-                      : urlSimulationReport.pathVisual.filterLayer === 'bypassed'
-                      ? 'bg-[#ff5c7a]/20 text-[#ff5c7a] animate-pulse'
-                      : 'bg-[#ffb547]/20 text-[#ffb547]'
-                  }`}>
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-[#8b96b8]">中間防御</div>
-                    <div className="text-xs font-bold text-white">ローカルACL・ブロック層</div>
-                    <div className="text-[10px] mt-0.5 font-bold">
-                      {urlSimulationReport.pathVisual.filterLayer === 'dropped' && (
-                        <span className="text-[#3ddc97]">🚫 トラフィック遮断成功</span>
-                      )}
-                      {urlSimulationReport.pathVisual.filterLayer === 'bypassed' && (
-                        <span className="text-[#ff5c7a]">⚠️ 迂回経路が露出</span>
-                      )}
-                      {urlSimulationReport.pathVisual.filterLayer === 'allowed' && (
-                        <span className="text-[#ffb547]">⚪ ルール未設定（通過可能）</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Node 3: Target Layer */}
-                <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${
-                    urlSimulationReport.pathVisual.destinationLayer === 'safe'
-                      ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
-                      : urlSimulationReport.pathVisual.destinationLayer === 'suspicious'
-                      ? 'bg-[#ffb547]/20 text-[#ffb547]'
-                      : 'bg-[#ff5c7a]/20 text-[#ff5c7a]'
-                  }`}>
-                    <Server className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-[#8b96b8]">通信宛先</div>
-                    <div className="text-xs font-bold text-white truncate max-w-[120px]">{urlSimulationReport.hostname}</div>
-                    <div className="text-[10px] mt-0.5">
-                      {urlSimulationReport.overallRouteStatus === 'securely_blocked' ? (
-                        <span className="text-[#3ddc97] font-semibold">到達不可 (安全)</span>
-                      ) : urlSimulationReport.overallRouteStatus === 'bypass_risk_detected' ? (
-                        <span className="text-[#ff5c7a] font-bold">不正接続リスク大</span>
-                      ) : (
-                        <span className="text-[#8b96b8]">通常監視対象</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick action bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-[#161d2e] border border-[#2a3550] gap-3">
-              <div className="flex items-center gap-3">
-                <div className="text-xs">
-                  <span className="text-[#8b96b8]">経路危険度リスクスコア: </span>
-                  <span className={`font-mono font-black text-base ml-1 ${
-                    urlSimulationReport.riskScore >= 40
-                      ? 'text-[#ff5c7a]'
-                      : urlSimulationReport.riskScore > 0
-                      ? 'text-[#ffb547]'
-                      : 'text-[#3ddc97]'
-                  }`}>
-                    {urlSimulationReport.riskScore} / 100
-                  </span>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                  urlSimulationReport.overallRouteStatus === 'securely_blocked'
-                    ? 'bg-[#3ddc97]/20 text-[#3ddc97] border-[#3ddc97]/40'
-                    : urlSimulationReport.overallRouteStatus === 'bypass_risk_detected'
-                    ? 'bg-[#ff5c7a]/20 text-[#ff5c7a] border-[#ff5c7a]/40 animate-pulse'
-                    : 'bg-[#ffb547]/20 text-[#ffb547] border-[#ffb547]/40'
-                }`}>
-                  {urlSimulationReport.overallRouteStatus === 'securely_blocked' && '🔒 安全に遮断中'}
-                  {urlSimulationReport.overallRouteStatus === 'bypass_risk_detected' && '🚨 迂回・侵入リスク検知'}
-                  {urlSimulationReport.overallRouteStatus === 'monitored_safe' && '🛡️ 監視対象'}
-                </span>
-              </div>
-
-              {urlSimulationReport.overallRouteStatus !== 'securely_blocked' && (
+            {/* View Mode Switcher */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#2a3550]">
+              <div className="flex items-center gap-1 bg-[#161d2e] p-1 rounded-lg border border-[#2a3550]">
                 <button
-                  onClick={handleBlockDiscoveredUrl}
-                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-[#ff416c] to-[#ff5c7a] hover:opacity-90 active:scale-95 text-xs font-bold text-white shadow-md cursor-pointer transition"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>この通信経路を即時ブロック</span>
-                </button>
-              )}
-            </div>
-
-            {/* Step-by-step diagnostic test results */}
-            <div className="space-y-2">
-              <div className="text-xs font-bold text-[#8b96b8] px-1">
-                通信経路・侵入実験テスト結果詳細（全{urlSimulationReport.steps.length}項目）
-              </div>
-
-              {urlSimulationReport.steps.map((st) => (
-                <div
-                  key={st.stepId}
-                  className={`p-3.5 rounded-xl border ${
-                    st.status === 'open_bypass'
-                      ? 'bg-[#161d2e] border-[#ff5c7a]/40'
-                      : st.status === 'warning'
-                      ? 'bg-[#161d2e] border-[#ffb547]/40'
-                      : 'bg-[#161d2e]/70 border-[#2a3550]'
+                  type="button"
+                  onClick={() => setUrlDiagnosticMode('both')}
+                  className={`px-3 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                    urlDiagnosticMode === 'both' ? 'bg-[#9d4edd] text-white shadow-sm' : 'text-[#8b96b8] hover:text-white'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[#0f1420] text-[#5b8cff]">
-                          Step {st.stepId}
-                        </span>
-                        <span className="text-xs font-bold text-white">{st.name}</span>
-                        <span className="text-[10px] font-mono text-[#8b96b8]">[{st.category}]</span>
+                  🔄 双方向（全体）
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUrlDiagnosticMode('outbound')}
+                  className={`px-3 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                    urlDiagnosticMode === 'outbound' ? 'bg-[#5b8cff] text-white shadow-sm' : 'text-[#8b96b8] hover:text-white'
+                  }`}
+                >
+                  📤 通信経路 (端末 ➔ 宛先)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUrlDiagnosticMode('inbound')}
+                  className={`px-3 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                    urlDiagnosticMode === 'inbound' ? 'bg-[#ff5c7a] text-white shadow-sm' : 'text-[#8b96b8] hover:text-white'
+                  }`}
+                >
+                  📥 侵入実証 (宛先 ➔ 端末)
+                </button>
+              </div>
+
+              <div className="text-[11px] text-[#8b96b8] font-mono">
+                Target: <span className="text-[#c77dff] font-bold">{urlSimulationReport.hostname}</span>
+              </div>
+            </div>
+
+            {/* Outbound Route Section */}
+            {(urlDiagnosticMode === 'both' || urlDiagnosticMode === 'outbound') && (
+              <div className="space-y-4">
+                {/* Visual Penetration Path Map */}
+                <div className="p-4 rounded-xl bg-[#161d2e] border border-[#2a3550] space-y-3">
+                  <div className="text-xs font-bold text-white flex items-center justify-between">
+                    <span>通信経路シミュレーション・フロー（端末 ➔ フィルタ ➔ 宛先）</span>
+                    <span className="text-[11px] font-mono text-[#8b96b8]">
+                      {urlSimulationReport.protocol}//:{urlSimulationReport.port}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                    {/* Node 1: Device Layer */}
+                    <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        urlSimulationReport.pathVisual.deviceLayer === 'protected'
+                          ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
+                          : 'bg-[#ff5c7a]/20 text-[#ff5c7a]'
+                      }`}>
+                        <Laptop className="w-5 h-5" />
                       </div>
-                      <p className="text-xs text-[#cbd5e1] mt-1.5 leading-relaxed">{st.description}</p>
+                      <div>
+                        <div className="text-[10px] text-[#8b96b8]">発信元</div>
+                        <div className="text-xs font-bold text-white">ローカル端末 / PWA</div>
+                        <div className="text-[10px] mt-0.5 text-[#3ddc97]">サンドボックス稼働中</div>
+                      </div>
                     </div>
 
-                    <div className="shrink-0">
-                      {st.status === 'blocked' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#3ddc97]/15 text-[#3ddc97] border border-[#3ddc97]/30 flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" /> 遮断・正常
-                        </span>
-                      ) : st.status === 'warning' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffb547]/15 text-[#ffb547] border border-[#ffb547]/30 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> 要注意
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ff5c7a]/20 text-[#ff5c7a] border border-[#ff5c7a]/40 flex items-center gap-1 animate-pulse">
-                          <ShieldAlert className="w-3 h-3" /> 抜け道検知
-                        </span>
+                    {/* Node 2: Filter Layer */}
+                    <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3 relative">
+                      <div className={`p-2 rounded-lg ${
+                        urlSimulationReport.pathVisual.filterLayer === 'dropped'
+                          ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
+                          : urlSimulationReport.pathVisual.filterLayer === 'bypassed'
+                          ? 'bg-[#ff5c7a]/20 text-[#ff5c7a] animate-pulse'
+                          : 'bg-[#ffb547]/20 text-[#ffb547]'
+                      }`}>
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-[#8b96b8]">中間防御</div>
+                        <div className="text-xs font-bold text-white">ローカルACL・ブロック層</div>
+                        <div className="text-[10px] mt-0.5 font-bold">
+                          {urlSimulationReport.pathVisual.filterLayer === 'dropped' && (
+                            <span className="text-[#3ddc97]">🚫 トラフィック遮断成功</span>
+                          )}
+                          {urlSimulationReport.pathVisual.filterLayer === 'bypassed' && (
+                            <span className="text-[#ff5c7a]">⚠️ 迂回経路が露出</span>
+                          )}
+                          {urlSimulationReport.pathVisual.filterLayer === 'allowed' && (
+                            <span className="text-[#ffb547]">⚪ ルール未設定（通過可能）</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Node 3: Target Layer */}
+                    <div className="p-3 rounded-lg bg-[#0f1420] border border-[#2a3550] flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        urlSimulationReport.pathVisual.destinationLayer === 'safe'
+                          ? 'bg-[#3ddc97]/20 text-[#3ddc97]'
+                          : urlSimulationReport.pathVisual.destinationLayer === 'suspicious'
+                          ? 'bg-[#ffb547]/20 text-[#ffb547]'
+                          : 'bg-[#ff5c7a]/20 text-[#ff5c7a]'
+                      }`}>
+                        <Server className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-[#8b96b8]">通信宛先</div>
+                        <div className="text-xs font-bold text-white truncate max-w-[120px]">{urlSimulationReport.hostname}</div>
+                        <div className="text-[10px] mt-0.5">
+                          {urlSimulationReport.overallRouteStatus === 'securely_blocked' ? (
+                            <span className="text-[#3ddc97] font-semibold">到達不可 (安全)</span>
+                          ) : urlSimulationReport.overallRouteStatus === 'bypass_risk_detected' ? (
+                            <span className="text-[#ff5c7a] font-bold">不正接続リスク大</span>
+                          ) : (
+                            <span className="text-[#8b96b8]">通常監視対象</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick action bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-[#161d2e] border border-[#2a3550] gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs">
+                      <span className="text-[#8b96b8]">経路危険度リスクスコア: </span>
+                      <span className={`font-mono font-black text-base ml-1 ${
+                        urlSimulationReport.riskScore >= 40
+                          ? 'text-[#ff5c7a]'
+                          : urlSimulationReport.riskScore > 0
+                          ? 'text-[#ffb547]'
+                          : 'text-[#3ddc97]'
+                      }`}>
+                        {urlSimulationReport.riskScore} / 100
+                      </span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                      urlSimulationReport.overallRouteStatus === 'securely_blocked'
+                        ? 'bg-[#3ddc97]/20 text-[#3ddc97] border-[#3ddc97]/40'
+                        : urlSimulationReport.overallRouteStatus === 'bypass_risk_detected'
+                        ? 'bg-[#ff5c7a]/20 text-[#ff5c7a] border-[#ff5c7a]/40 animate-pulse'
+                        : 'bg-[#ffb547]/20 text-[#ffb547] border-[#ffb547]/40'
+                    }`}>
+                      {urlSimulationReport.overallRouteStatus === 'securely_blocked' && '🔒 安全に遮断中'}
+                      {urlSimulationReport.overallRouteStatus === 'bypass_risk_detected' && '🚨 迂回・侵入リスク検知'}
+                      {urlSimulationReport.overallRouteStatus === 'monitored_safe' && '🛡️ 監視対象'}
+                    </span>
+                  </div>
+
+                  {urlSimulationReport.overallRouteStatus !== 'securely_blocked' && (
+                    <button
+                      onClick={handleBlockDiscoveredUrl}
+                      className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-[#ff416c] to-[#ff5c7a] hover:opacity-90 active:scale-95 text-xs font-bold text-white shadow-md cursor-pointer transition"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>この通信経路を即時ブロック</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Step-by-step diagnostic test results */}
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-[#8b96b8] px-1">
+                    通信経路・迂回テスト結果詳細（全{urlSimulationReport.steps.length}項目）
+                  </div>
+
+                  {urlSimulationReport.steps.map((st) => (
+                    <div
+                      key={st.stepId}
+                      className={`p-3.5 rounded-xl border ${
+                        st.status === 'open_bypass'
+                          ? 'bg-[#161d2e] border-[#ff5c7a]/40'
+                          : st.status === 'warning'
+                          ? 'bg-[#161d2e] border-[#ffb547]/40'
+                          : 'bg-[#161d2e]/70 border-[#2a3550]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[#0f1420] text-[#5b8cff]">
+                              Step {st.stepId}
+                            </span>
+                            <span className="text-xs font-bold text-white">{st.name}</span>
+                            <span className="text-[10px] font-mono text-[#8b96b8]">[{st.category}]</span>
+                          </div>
+                          <p className="text-xs text-[#cbd5e1] mt-1.5 leading-relaxed">{st.description}</p>
+                        </div>
+
+                        <div className="shrink-0">
+                          {st.status === 'blocked' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#3ddc97]/15 text-[#3ddc97] border border-[#3ddc97]/30 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> 遮断・正常
+                            </span>
+                          ) : st.status === 'warning' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffb547]/15 text-[#ffb547] border border-[#ffb547]/30 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> 要注意
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ff5c7a]/20 text-[#ff5c7a] border border-[#ff5c7a]/40 flex items-center gap-1 animate-pulse">
+                              <ShieldAlert className="w-3 h-3" /> 抜け道検知
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Simulated attack & remediation */}
+                      <div className="mt-3 pt-2.5 border-t border-[#2a3550]/60 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                        <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
+                          <span className="font-bold text-[#c77dff] block mb-0.5">模擬侵入シナリオ:</span>
+                          <span className="text-[#94a3b8]">{st.attackVectorSimulated}</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
+                          <span className="font-bold text-[#3ddc97] block mb-0.5">防御的対策手順:</span>
+                          <span className="text-[#94a3b8]">{st.remediation}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Inbound Penetration & Device Containment Section */}
+            {(urlDiagnosticMode === 'both' || urlDiagnosticMode === 'inbound') && inboundReport && (
+              <div className="space-y-4 pt-4 border-t border-[#2a3550]">
+                {/* Header Card */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-[#161d2e] via-[#1a1528] to-[#161d2e] border border-[#ff5c7a]/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-[#ff5c7a]/20 text-[#ff5c7a]">
+                        <ArrowDownCircle className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">
+                            対象サイト ➔ デバイスへの擬似侵入ルート実証
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            inboundReport.overallDefensePower >= 85
+                              ? 'bg-[#3ddc97]/20 text-[#3ddc97] border-[#3ddc97]/40'
+                              : inboundReport.overallDefensePower >= 60
+                              ? 'bg-[#ffb547]/20 text-[#ffb547] border-[#ffb547]/40'
+                              : 'bg-[#ff5c7a]/20 text-[#ff5c7a] border-[#ff5c7a]/40 animate-pulse'
+                          }`}>
+                            {inboundReport.containmentRating}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#8b96b8] mt-0.5 font-mono">
+                          Origin: {inboundReport.hostname}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-[10px] text-[#8b96b8]">端末防御・封じ込め強度</div>
+                        <div className={`font-mono font-black text-xl ${
+                          inboundReport.overallDefensePower >= 85
+                            ? 'text-[#3ddc97]'
+                            : inboundReport.overallDefensePower >= 60
+                            ? 'text-[#ffb547]'
+                            : 'text-[#ff5c7a]'
+                        }`}>
+                          {inboundReport.overallDefensePower} <span className="text-xs text-[#8b96b8] font-normal">/ 100</span>
+                        </div>
+                      </div>
+
+                      {!pwaShieldActive && (
+                        <button
+                          type="button"
+                          onClick={togglePwaSandboxShield}
+                          className="px-3 py-1.5 rounded-lg bg-[#5b8cff]/20 hover:bg-[#5b8cff]/30 border border-[#5b8cff]/40 text-xs font-bold text-[#5b8cff] transition cursor-pointer"
+                        >
+                          🛡️ PWAシールド起動
+                        </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Simulated attack & remediation */}
-                  <div className="mt-3 pt-2.5 border-t border-[#2a3550]/60 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
-                      <span className="font-bold text-[#c77dff] block mb-0.5">模擬侵入シナリオ:</span>
-                      <span className="text-[#94a3b8]">{st.attackVectorSimulated}</span>
+                  <p className="text-xs text-[#cbd5e1] leading-relaxed bg-[#0f1420]/80 p-2.5 rounded-lg border border-[#2a3550]">
+                    {inboundReport.executiveSummary}
+                  </p>
+
+                  {/* Multi-Layer Containment Flow */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                    <div className={`p-2.5 rounded-lg border flex items-center gap-2.5 ${
+                      inboundReport.layerStatus.networkPerimeter === 'blocked'
+                        ? 'bg-[#3ddc97]/10 border-[#3ddc97]/40 text-[#3ddc97]'
+                        : 'bg-[#ffb547]/10 border-[#ffb547]/40 text-[#ffb547]'
+                    }`}>
+                      <Layers className="w-4 h-4 shrink-0" />
+                      <div>
+                        <div className="font-bold text-[11px]">第1防壁: ネットワーク境界</div>
+                        <div className="text-[10px] text-[#e8ecf6]">
+                          {inboundReport.layerStatus.networkPerimeter === 'blocked' ? '🚫 接続パケット即時破棄' : '⚪ トラフィック受信中'}
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
-                      <span className="font-bold text-[#3ddc97] block mb-0.5">防御的対策手順:</span>
-                      <span className="text-[#94a3b8]">{st.remediation}</span>
+
+                    <div className={`p-2.5 rounded-lg border flex items-center gap-2.5 ${
+                      inboundReport.layerStatus.pwaSandbox === 'active_intercept'
+                        ? 'bg-[#3ddc97]/10 border-[#3ddc97]/40 text-[#3ddc97]'
+                        : 'bg-[#ff5c7a]/10 border-[#ff5c7a]/40 text-[#ff5c7a]'
+                    }`}>
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <div>
+                        <div className="font-bold text-[11px]">第2防壁: PWAサンドボックス</div>
+                        <div className="text-[10px] text-[#e8ecf6]">
+                          {inboundReport.layerStatus.pwaSandbox === 'active_intercept' ? '🛡️ 独立プロセス隔離' : '⚠️ 共有ブラウザ環境'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`p-2.5 rounded-lg border flex items-center gap-2.5 ${
+                      inboundReport.layerStatus.osStorageShield === 'protected'
+                        ? 'bg-[#3ddc97]/10 border-[#3ddc97]/40 text-[#3ddc97]'
+                        : 'bg-[#ff5c7a]/10 border-[#ff5c7a]/40 text-[#ff5c7a]'
+                    }`}>
+                      <HardDrive className="w-4 h-4 shrink-0" />
+                      <div>
+                        <div className="font-bold text-[11px]">第3防壁: OSストレージ保護</div>
+                        <div className="text-[10px] text-[#e8ecf6]">
+                          {inboundReport.layerStatus.osStorageShield === 'protected' ? '🔒 ファイル汚染防止' : '⚠️ 保存・実行リスク'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Inbound Attack Vector Details */}
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-[#8b96b8] px-1 flex items-center justify-between">
+                    <span>外部サイトからの侵入ルート実証結果（全{inboundReport.vectors.length}項目）</span>
+                    <span className="text-[10px] text-[#c77dff]">サンドボックス封じ込め検証</span>
+                  </div>
+
+                  {inboundReport.vectors.map((vec) => (
+                    <div
+                      key={vec.id}
+                      className={`p-3.5 rounded-xl border ${
+                        vec.defenseStatus === 'exposed'
+                          ? 'bg-[#161d2e] border-[#ff5c7a]/40'
+                          : vec.defenseStatus === 'sandboxed'
+                          ? 'bg-[#161d2e] border-[#ffb547]/40'
+                          : 'bg-[#161d2e]/70 border-[#2a3550]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[#0f1420] text-[#c77dff]">
+                              {vec.id}
+                            </span>
+                            <span className="text-xs font-bold text-white">{vec.vectorName}</span>
+                            <span className="text-[10px] font-mono text-[#8b96b8]">[{vec.category}]</span>
+                          </div>
+                          <div className="text-xs text-[#cbd5e1] mt-1.5">
+                            <span className="text-[#8b96b8]">侵入経路(Entry): </span>
+                            <code className="text-[11px] text-[#c77dff] font-mono">{vec.entryPoint}</code>
+                          </div>
+                          <p className="text-xs text-[#94a3b8] mt-1 leading-relaxed">{vec.impactAnalysis}</p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          {vec.defenseStatus === 'contained' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#3ddc97]/15 text-[#3ddc97] border border-[#3ddc97]/30 inline-flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> 封じ込め成功
+                            </span>
+                          ) : vec.defenseStatus === 'sandboxed' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ffb547]/15 text-[#ffb547] border border-[#ffb547]/30 inline-flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> サンドボックス隔離
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#ff5c7a]/20 text-[#ff5c7a] border border-[#ff5c7a]/40 inline-flex items-center gap-1 animate-pulse">
+                              <ShieldAlert className="w-3 h-3" /> 端末露出リスク
+                            </span>
+                          )}
+                          <div className="text-[10px] font-mono text-[#8b96b8] mt-1">
+                            阻害層: {vec.barrierHit}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Simulated Payload & Hardening */}
+                      <div className="mt-3 pt-2.5 border-t border-[#2a3550]/60 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                        <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
+                          <span className="font-bold text-[#ffb547] block mb-0.5">試行ペイロード / 侵入挙動:</span>
+                          <span className="text-[#cbd5e1] font-mono">{vec.simulatedPayload}</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#0f1420] border border-[#2a3550]/60">
+                          <span className="font-bold text-[#3ddc97] block mb-0.5">封じ込め＆防御強化策:</span>
+                          <span className="text-[#cbd5e1]">{vec.hardeningFix}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
 
       {/* Overview 2-column layout per prompt spec */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

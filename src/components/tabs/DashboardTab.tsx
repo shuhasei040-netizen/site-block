@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -11,9 +11,11 @@ import {
   TrendingUp,
   FileText,
   Zap,
+  Radio,
 } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
 import { analyzeThreatPatterns } from '../../utils/threatEngine';
+import { RemoteRecoveryModal } from '../modals/RemoteRecoveryModal';
 
 export const DashboardTab: React.FC<{ onNavigateTo: (tab: any) => void }> = ({ onNavigateTo }) => {
   const {
@@ -24,6 +26,8 @@ export const DashboardTab: React.FC<{ onNavigateTo: (tab: any) => void }> = ({ o
     backdoorReport,
     setIsBackdoorAlertOpen,
   } = useSecurity();
+
+  const [isRemoteRecoveryOpen, setIsRemoteRecoveryOpen] = useState(false);
 
   const activeRestrictions = restrictions.filter((r) => r.status === 'active');
   const suspiciousRestrictions = activeRestrictions.filter((r) => r.credibilityScore < 40);
@@ -146,6 +150,19 @@ export const DashboardTab: React.FC<{ onNavigateTo: (tab: any) => void }> = ({ o
                       </button>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-[#ff5c7a]/30 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-[#ffb8c5]">
+                    画面ロックまたは不正制限が有効な場合でも、隔離トンネルから安全に無効化できます
+                  </span>
+                  <button
+                    onClick={() => setIsRemoteRecoveryOpen(true)}
+                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#ff5c7a] to-[#ffb547] text-white font-bold text-xs hover:opacity-95 transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-[#ff5c7a]/20"
+                  >
+                    <Radio className="w-3.5 h-3.5 animate-pulse" />
+                    <span>🚨 検証用ルートから迅速無効化・リカバリー</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -449,6 +466,12 @@ export const DashboardTab: React.FC<{ onNavigateTo: (tab: any) => void }> = ({ o
           </table>
         </div>
       </div>
+
+      {/* Remote Verification & Rapid Backdoor Recovery Modal */}
+      <RemoteRecoveryModal
+        isOpen={isRemoteRecoveryOpen}
+        onClose={() => setIsRemoteRecoveryOpen(false)}
+      />
     </div>
   );
 };

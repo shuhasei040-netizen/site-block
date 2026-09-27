@@ -518,7 +518,7 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
     // 1. Establish emergency remote verification channel & override lock
     setIsEmergencyOverridden(true);
 
-    const { patchedRestrictions, patchedAccounts, patchResult } = executeEmergencyVerificationAndPatch(
+    const { patchedRestrictions, patchedAccounts, patchedSites, patchResult } = executeEmergencyVerificationAndPatch(
       restrictions,
       accounts,
       sites
@@ -526,6 +526,7 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     setRestrictions(patchedRestrictions);
     setAccounts(patchedAccounts);
+    setSites(patchedSites);
     setLastEmergencyPatchResult(patchResult);
 
     if (!currentUser || currentUser.role !== 'L3') {

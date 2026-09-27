@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Zap, Shield, Sparkles, AlertCircle } from 'lucide-react';
+import { ShieldAlert, Zap, Shield, Sparkles, AlertCircle, Radio } from 'lucide-react';
 import { useSecurity } from '../context/SecurityContext';
+import { RemoteRecoveryModal } from './modals/RemoteRecoveryModal';
 
 export const PWASandboxShield: React.FC = () => {
   const {
@@ -14,6 +15,7 @@ export const PWASandboxShield: React.FC = () => {
 
   const [isBlasting, setIsBlasting] = useState(false);
   const [lastBlastResult, setLastBlastResult] = useState<number | null>(null);
+  const [isRemoteRecoveryOpen, setIsRemoteRecoveryOpen] = useState(false);
 
   const activeRogueCount = restrictions.filter((r) => r.status === 'active').length;
   const repelledCount = restrictions.filter((r) => r.status === 'repelled').length;
@@ -81,7 +83,16 @@ export const PWASandboxShield: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-end md:self-center shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-end md:self-center shrink-0">
+          <button
+            onClick={() => setIsRemoteRecoveryOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border border-[#ff5c7a]/60 bg-gradient-to-r from-[#ff5c7a]/20 to-[#ffb547]/20 hover:from-[#ff5c7a]/30 hover:to-[#ffb547]/30 text-white transition cursor-pointer shadow-md shadow-[#ff5c7a]/15"
+            title="画面ロック時でも検証用ルートからリモート接続し、バックドアを迅速無効化"
+          >
+            <Radio className="w-4 h-4 text-[#ff5c7a] animate-pulse" />
+            <span>検証リモート復旧</span>
+          </button>
+
           <button
             onClick={() => runDeepBackdoorAudit(true)}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-[#ff5c7a]/40 bg-[#ff5c7a]/10 hover:bg-[#ff5c7a]/20 text-[#ff5c7a] transition cursor-pointer"
@@ -132,6 +143,12 @@ export const PWASandboxShield: React.FC = () => {
           </span>
         </div>
       )}
+
+      {/* Remote Verification & Rapid Backdoor Recovery Modal */}
+      <RemoteRecoveryModal
+        isOpen={isRemoteRecoveryOpen}
+        onClose={() => setIsRemoteRecoveryOpen(false)}
+      />
     </div>
   );
 };

@@ -13,6 +13,7 @@ import { AccountsTab } from './components/tabs/AccountsTab';
 import { AuditTab } from './components/tabs/AuditTab';
 import { LogsTab } from './components/tabs/LogsTab';
 import { SettingsTab } from './components/tabs/SettingsTab';
+import { RemoteRecoveryModal } from './components/modals/RemoteRecoveryModal';
 import { AlertOctagon, RefreshCw, RotateCcw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -103,6 +104,7 @@ const AppContent: React.FC = () => {
   } = useSecurity();
   const [currentTab, setCurrentTab] = useState<TabKey>('dashboard');
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
+  const [isRemoteRecoveryOpen, setIsRemoteRecoveryOpen] = useState(false);
 
   // If not logged in, show the full login screen
   if (!currentUser) {
@@ -120,6 +122,7 @@ const AppContent: React.FC = () => {
         <Header
           currentTab={currentTab}
           onOpenEmergencyModal={() => setIsEmergencyModalOpen(true)}
+          onOpenRemoteRecovery={() => setIsRemoteRecoveryOpen(true)}
         />
 
         {/* Content Scroll View */}
@@ -142,6 +145,12 @@ const AppContent: React.FC = () => {
       <EmergencyModal
         isOpen={isEmergencyModalOpen}
         onClose={() => setIsEmergencyModalOpen(false)}
+      />
+
+      {/* Remote Verification & Rapid Backdoor Recovery Modal */}
+      <RemoteRecoveryModal
+        isOpen={isRemoteRecoveryOpen}
+        onClose={() => setIsRemoteRecoveryOpen(false)}
       />
 
       {/* Backdoor & Evasion Audit Alert Modal */}

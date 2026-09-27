@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, Key, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { Shield, Key, Lock, User, AlertCircle, CheckCircle, Radio } from 'lucide-react';
 import { useSecurity, MASTER_KEY } from '../context/SecurityContext';
+import { RemoteRecoveryModal } from './modals/RemoteRecoveryModal';
 
 export const LoginModal: React.FC = () => {
   const { login } = useSecurity();
@@ -8,6 +9,7 @@ export const LoginModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRemoteRecoveryOpen, setIsRemoteRecoveryOpen] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,8 +119,23 @@ export const LoginModal: React.FC = () => {
           </button>
         </form>
 
+        {/* Remote Recovery Route Access Button */}
+        <div className="mt-4 pt-3.5 border-t border-[#2a3550]">
+          <button
+            type="button"
+            onClick={() => setIsRemoteRecoveryOpen(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#ff5c7a]/60 bg-gradient-to-r from-[#ff5c7a]/25 via-[#ffb547]/20 to-[#ff5c7a]/25 py-2.5 px-3 text-xs font-extrabold text-white hover:border-[#ff5c7a] hover:bg-[#ff5c7a]/35 transition cursor-pointer shadow-lg shadow-[#ff5c7a]/20 group"
+          >
+            <Radio className="w-4 h-4 text-[#ff5c7a] animate-pulse group-hover:scale-110 transition-transform" />
+            <span>🚨 画面ロック時：検証用ルートから遠隔復旧</span>
+          </button>
+          <p className="text-[10px] text-center text-[#8b96b8] mt-1.5">
+            画面ロック・制限下でも安全な検証トンネルを確立し、バックドアを迅速無効化します
+          </p>
+        </div>
+
         {/* Demo Credentials Box */}
-        <div className="mt-6 rounded-xl border border-[#2a3550] bg-[#161d2e]/80 p-3.5 text-xs text-[#8b96b8]">
+        <div className="mt-4 rounded-xl border border-[#2a3550] bg-[#161d2e]/80 p-3.5 text-xs text-[#8b96b8]">
           <div className="font-bold text-[#e8ecf6] mb-2 flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-[#5b8cff]" />
             <span>テスト用認証情報（クリックで自動入力）：</span>
@@ -158,6 +175,12 @@ export const LoginModal: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Remote Verification & Rapid Recovery Modal */}
+      <RemoteRecoveryModal
+        isOpen={isRemoteRecoveryOpen}
+        onClose={() => setIsRemoteRecoveryOpen(false)}
+      />
     </div>
   );
 };

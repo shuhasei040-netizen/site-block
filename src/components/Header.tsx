@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileCode, AlertOctagon, Clock, ShieldAlert } from 'lucide-react';
+import { Download, FileCode, AlertOctagon, Clock, ShieldAlert, Radio } from 'lucide-react';
 import { useSecurity } from '../context/SecurityContext';
 import { PWAInstallButton } from './PWAInstallButton';
 import { TabKey } from './Sidebar';
@@ -7,9 +7,10 @@ import { TabKey } from './Sidebar';
 interface HeaderProps {
   currentTab: TabKey;
   onOpenEmergencyModal: () => void;
+  onOpenRemoteRecovery?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentTab, onOpenEmergencyModal }) => {
+export const Header: React.FC<HeaderProps> = ({ currentTab, onOpenEmergencyModal, onOpenRemoteRecovery }) => {
   const {
     sessionRemainingSeconds,
     exportJsonBackup,
@@ -135,6 +136,16 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onOpenEmergencyModal
           </span>
         </button>
 
+        {/* Remote Recovery Route Access Button */}
+        <button
+          onClick={onOpenRemoteRecovery}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#ff5c7a]/60 bg-gradient-to-r from-[#ff5c7a]/25 to-[#ffb547]/20 hover:from-[#ff5c7a]/35 hover:to-[#ffb547]/30 text-white text-xs font-bold transition cursor-pointer shadow-md shadow-[#ff5c7a]/15 group"
+          title="検証用ルートから安全にリモート接続し、不正バックドアを迅速無効化・リカバリー"
+        >
+          <Radio className="w-3.5 h-3.5 text-[#ff5c7a] animate-pulse group-hover:scale-110 transition-transform" />
+          <span>🚨 検証リモート復旧</span>
+        </button>
+
         {/* Emergency Override Button */}
         <button
           onClick={onOpenEmergencyModal}
@@ -142,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onOpenEmergencyModal
           title="シークレットマスターキーによる完全ロックダウン脱出"
         >
           <AlertOctagon className="w-3.5 h-3.5 animate-pulse" />
-          <span>🚨 緊急復旧</span>
+          <span>緊急復旧</span>
         </button>
       </div>
     </header>

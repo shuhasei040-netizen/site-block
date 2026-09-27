@@ -267,7 +267,9 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('MLSMD_CURRENT_USER');
-      return saved ? JSON.parse(saved) : SEED_USERS[0]; // Auto-login admin for instant exploration
+      if (!saved || saved === 'null' || saved === 'undefined') return SEED_USERS[0];
+      const parsed = JSON.parse(saved);
+      return parsed && parsed.id ? parsed : SEED_USERS[0];
     } catch {
       return SEED_USERS[0];
     }
@@ -276,7 +278,9 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [accounts, setAccounts] = useState<UserAccount[]>(() => {
     try {
       const saved = localStorage.getItem('MLSMD_ACCOUNTS');
-      return saved ? JSON.parse(saved) : SEED_USERS;
+      if (!saved || saved === 'null' || saved === 'undefined') return SEED_USERS;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_USERS;
     } catch {
       return SEED_USERS;
     }
@@ -285,7 +289,9 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [sites, setSites] = useState<SiteItem[]>(() => {
     try {
       const saved = localStorage.getItem('MLSMD_SITES');
-      return saved ? JSON.parse(saved) : SEED_SITES;
+      if (!saved || saved === 'null' || saved === 'undefined') return SEED_SITES;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_SITES;
     } catch {
       return SEED_SITES;
     }
@@ -294,7 +300,9 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [restrictions, setRestrictions] = useState<RestrictionItem[]>(() => {
     try {
       const saved = localStorage.getItem('MLSMD_RESTRICTIONS');
-      return saved ? JSON.parse(saved) : SEED_RESTRICTIONS;
+      if (!saved || saved === 'null' || saved === 'undefined') return SEED_RESTRICTIONS;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : SEED_RESTRICTIONS;
     } catch {
       return SEED_RESTRICTIONS;
     }
@@ -303,7 +311,10 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [logs, setLogs] = useState<LogEntry[]>(() => {
     try {
       const saved = localStorage.getItem('MLSMD_LOGS');
-      if (saved) return JSON.parse(saved);
+      if (saved && saved !== 'null' && saved !== 'undefined') {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {
       // fallback
     }
@@ -373,6 +384,36 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
   useEffect(() => {
     localStorage.setItem('MLSMD_PWA_SHIELD', String(pwaShieldActive));
   }, [pwaShieldActive]);
+
+  // Append immutable log entry with CRC-32 (defined at top to avoid TDZ ReferenceError)
+  const addLogEntry = useCallback(
+    (action: string, category: LogCategory, status: 'success' | 'failure' | 'warning' = 'success', customOperator?: string): LogEntry => {
+      const time = formatTimestamp();
+      const op = customOperator || (currentUser ? currentUser.id : 'system');
+      const id = 'log-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 5);
+      const canonical = `${id}|${time}|${op}|${category}|${action}|${status}`;
+      const checksum = computeCRC32(canonical);
+
+      const newEntry: LogEntry = {
+        id,
+        timestamp: time,
+        operatorId: op,
+        action,
+        category,
+        status,
+        checksum,
+        isTamperProof: true,
+      };
+
+      setLogs((prev) => {
+        const next = [newEntry, ...prev];
+        return next.slice(0, 5000); // Retain max 5,000 entries per spec
+      });
+
+      return newEntry;
+    },
+    [currentUser]
+  );
 
   // Check standalone mode and Backdoor audit state
   const [backdoorReport, setBackdoorReport] = useState<BackdoorScanReport | null>(null);
@@ -581,36 +622,6 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
       window.removeEventListener('mousemove', resetSession);
     };
   }, [currentUser]);
-
-  // Append immutable log entry with CRC-32
-  const addLogEntry = useCallback(
-    (action: string, category: LogCategory, status: 'success' | 'failure' | 'warning' = 'success', customOperator?: string): LogEntry => {
-      const time = formatTimestamp();
-      const op = customOperator || (currentUser ? currentUser.id : 'system');
-      const id = 'log-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 5);
-      const canonical = `${id}|${time}|${op}|${category}|${action}|${status}`;
-      const checksum = computeCRC32(canonical);
-
-      const newEntry: LogEntry = {
-        id,
-        timestamp: time,
-        operatorId: op,
-        action,
-        category,
-        status,
-        checksum,
-        isTamperProof: true,
-      };
-
-      setLogs((prev) => {
-        const next = [newEntry, ...prev];
-        return next.slice(0, 5000); // Retain max 5,000 entries per spec
-      });
-
-      return newEntry;
-    },
-    [currentUser]
-  );
 
   // Login handler
   const login = useCallback(

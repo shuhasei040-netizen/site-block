@@ -160,7 +160,7 @@ export function simulateUrlPenetrationRoute(
     }
   });
 
-  const isExplicitlyBlocked = matchedSite?.status === 'blocked' || matchedRules.length > 0;
+  const isExplicitlyBlocked = matchedSite?.status === 'danger' || matchedRules.length > 0;
 
   if (isExplicitlyBlocked) {
     steps.push({

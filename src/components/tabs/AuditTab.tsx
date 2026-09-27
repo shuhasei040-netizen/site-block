@@ -98,7 +98,7 @@ export const AuditTab: React.FC = () => {
       setUrlSimulationReport(report);
 
       const isSiteBlocked =
-        sites.some((s) => s.status === 'blocked' && (report.hostname.includes(s.url.toLowerCase()) || s.url.toLowerCase().includes(report.hostname))) ||
+        sites.some((s) => s.status === 'danger' && (report.hostname.includes(s.url.toLowerCase()) || s.url.toLowerCase().includes(report.hostname))) ||
         restrictions.some((r) => r.status === 'active' && `${r.title} ${r.reason}`.toLowerCase().includes(report.hostname));
 
       const inbReport = simulateInboundDevicePenetration(raw, pwaShieldActive, isSiteBlocked);
@@ -107,8 +107,8 @@ export const AuditTab: React.FC = () => {
       setIsSimulatingRoute(false);
       addLogEntry(
         `URL通信経路＆インバウンド端末侵入診断実施: ${report.hostname} (経路リスク: ${report.riskScore}/100, 端末防御力: ${inbReport.overallDefensePower}/100)`,
-        'AUDIT',
-        report.overallRouteStatus === 'securely_blocked' ? 'success' : report.overallRouteStatus === 'monitored_safe' ? 'info' : 'warning'
+        'SECURITY',
+        report.overallRouteStatus === 'securely_blocked' ? 'success' : report.overallRouteStatus === 'monitored_safe' ? 'success' : 'warning'
       );
     }, 600);
   };

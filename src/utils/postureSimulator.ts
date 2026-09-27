@@ -35,7 +35,7 @@ export interface PostureEvaluationReport {
 export function runPostureSimulation(
   accounts: UserAccount[],
   restrictions: RestrictionItem[],
-  logs: SecurityLog[],
+  logs: LogEntry[],
   isPwaShieldActive: boolean = true
 ): PostureEvaluationReport {
   const scenarios: SimulationScenarioResult[] = [];

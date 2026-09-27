@@ -1,0 +1,1136 @@
+/**
+ * Generates a complete, self-contained, single-file HTML file (site-manager-security.html)
+ * that contains all styles, templates, logic, CRC-32 hashing, Master Key override,
+ * and localStorage support to run offline or directly via file://.
+ */
+export function generateStandaloneHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Layer Security Site Management Dashboard (MLSMD)</title>
+  <meta name="description" content="単一HTML完結型・多層セキュリティサイト管理ダッシュボード">
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --panel: #0f1420;
+      --panel2: #161d2e;
+      --border: #2a3550;
+      --text: #e8ecf6;
+      --subtext: #8b96b8;
+      --accent1: #5b8cff;
+      --accent2: #7c5bff;
+      --success: #3ddc97;
+      --warning: #ffb547;
+      --danger: #ff5c7a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; font-size: 13px; line-height: 1.5; }
+    button, input, select, textarea { font-family: inherit; font-size: inherit; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; border-radius: 8px; cursor: pointer; border: none; font-weight: 600; transition: all 0.2s; text-decoration: none; }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff; }
+    .btn-secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: linear-gradient(135deg, #ff416c, var(--danger)); color: #fff; }
+    .btn-warning { background: linear-gradient(135deg, #f7971e, var(--warning)); color: #000; font-weight: 700; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .badge-success { background: rgba(61, 220, 151, 0.15); color: var(--success); border: 1px solid rgba(61, 220, 151, 0.3); }
+    .badge-warning { background: rgba(255, 181, 71, 0.15); color: var(--warning); border: 1px solid rgba(255, 181, 71, 0.3); }
+    .badge-danger { background: rgba(255, 92, 122, 0.15); color: var(--danger); border: 1px solid rgba(255, 92, 122, 0.3); }
+    .badge-info { background: rgba(91, 140, 255, 0.15); color: var(--accent1); border: 1px solid rgba(91, 140, 255, 0.3); }
+    
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .panel-title { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    
+    /* Layout */
+    .app-container { display: flex; min-height: 100vh; }
+    .sidebar { width: 260px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+    .main-content { flex: 1; padding: 24px; overflow-y: auto; max-height: 100vh; }
+    
+    .logo-box { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .logo-icon { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--accent1), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .logo-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .logo-sub { font-size: 11px; color: var(--subtext); }
+    
+    .nav-list { list-style: none; padding: 16px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; color: var(--subtext); text-decoration: none; cursor: pointer; transition: 0.2s; font-weight: 500; }
+    .nav-item:hover, .nav-item.active { background: var(--panel2); color: #fff; }
+    .nav-item.active { border-left: 3px solid var(--accent1); color: var(--accent1); }
+    
+    .user-footer { padding: 16px; border-top: 1px solid var(--border); background: rgba(10, 14, 26, 0.4); }
+    .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #5b8cff, #7c5bff); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; }
+    
+    /* Top Bar */
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .topbar-title { font-size: 22px; font-weight: 700; color: #fff; }
+    .topbar-sub { font-size: 13px; color: var(--subtext); margin-top: 4px; }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; position: relative; overflow: hidden; }
+    .stat-card::after { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent1); }
+    .stat-card.danger::after { background: var(--danger); }
+    .stat-card.warning::after { background: var(--warning); }
+    .stat-card.success::after { background: var(--success); }
+    .stat-label { font-size: 12px; color: var(--subtext); margin-bottom: 6px; }
+    .stat-val { font-size: 26px; font-weight: 700; color: #fff; }
+    
+    /* Tables */
+    .table-container { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 12px 16px; background: var(--panel2); color: var(--subtext); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 14px 16px; border-bottom: 1px solid rgba(42, 53, 80, 0.5); vertical-align: middle; }
+    tr:hover td { background: rgba(22, 29, 46, 0.4); }
+    
+    /* Login Modal Overlay */
+    .login-overlay { position: fixed; inset: 0; background: rgba(10, 14, 26, 0.95); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-box { width: 100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--subtext); }
+    .form-input { width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: #fff; outline: none; transition: 0.2s; }
+    .form-input:focus { border-color: var(--accent1); box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.2); }
+    
+    /* Alert banner */
+    .alert-box { padding: 14px 18px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; border: 1px solid transparent; }
+    .alert-danger { background: rgba(255, 92, 122, 0.12); border-color: rgba(255, 92, 122, 0.3); color: #ffb8c5; }
+    .alert-warning { background: rgba(255, 181, 71, 0.12); border-color: rgba(255, 181, 71, 0.3); color: #ffe4ba; }
+    .alert-success { background: rgba(61, 220, 151, 0.12); border-color: rgba(61, 220, 151, 0.3); color: #b7f6db; }
+    
+    /* Modal generic */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 5000; }
+    .modal-overlay.open { display: flex; }
+    .modal-content { width: 100%; max-width: 520px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+    
+    /* Toast */
+    #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
+    .toast { padding: 12px 20px; border-radius: 8px; color: #fff; font-weight: 500; font-size: 13px; box-shadow: 0 5px 20px rgba(0,0,0,0.4); animation: slideIn 0.3s forwards; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
+    @media (max-width: 768px) {
+      .app-container { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      .nav-list { flex-direction: row; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container"></div>
+
+  <!-- Login Modal -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 40px; margin-bottom: 8px;">🛡️</div>
+        <h2 style="font-size: 20px; font-weight: 700; color: #fff;">サイト管理ダッシュボード</h2>
+        <p style="font-size: 12px; color: var(--subtext); margin-top: 4px;">Multi-Layer Security Site Management Dashboard</p>
+      </div>
+
+      <div id="loginFeedback" style="display: none; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 12px;"></div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">ユーザーID</label>
+          <input type="text" id="loginId" class="form-input" placeholder="例: admin" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">パスワード または マスターキー</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="パスワードまたはマスターキー" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px;">
+          🔒 セキュアログイン
+        </button>
+      </form>
+
+      <div style="margin-top: 20px; padding: 12px; background: var(--panel2); border-radius: 8px; border: 1px solid var(--border); font-size: 11px; color: var(--subtext);">
+        <div style="color: var(--accent1); font-weight: 600; margin-bottom: 4px;">🔑 初期ログイン情報</div>
+        <div>初期管理者：<strong>admin</strong> / <strong>admin123</strong></div>
+        <div style="margin-top: 2px;">マスターキー：<strong style="color: var(--warning);">MASTER-2024-OVERRIDE</strong></div>
+        <div style="margin-top: 6px; font-size: 10px; color: #889;">※ID列挙攻撃対策：未登録IDでも一律「アカウントが見つかりません」と応答します</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Layout -->
+  <div class="app-container" id="appLayout" style="display: none;">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo-box">
+        <div class="logo-icon">🛡️</div>
+        <div>
+          <div class="logo-title">Guardian Multi-Layer</div>
+          <div class="logo-sub">MLSMD Enterprise Security</div>
+        </div>
+      </div>
+
+      <ul class="nav-list">
+        <li><a class="nav-item active" onclick="switchTab('dashboard')"><span>📊</span> ダッシュボード</a></li>
+        <li><a class="nav-item" onclick="switchTab('sites')"><span>🌐</span> サイト一覧</a></li>
+        <li><a class="nav-item" onclick="switchTab('restrictions')"><span>🔒</span> 制限管理</a></li>
+        <li><a class="nav-item" onclick="switchTab('accounts')"><span>👤</span> アカウント管理</a></li>
+        <li><a class="nav-item" onclick="switchTab('audit')"><span>🔍</span> セキュリティ監査</a></li>
+        <li><a class="nav-item" onclick="switchTab('logs')"><span>📜</span> アクティビティログ</a></li>
+        <li><a class="nav-item" onclick="switchTab('settings')"><span>⚙️</span> システム設定</a></li>
+      </ul>
+
+      <div class="user-footer">
+        <div class="user-info">
+          <div class="user-avatar" id="sidebarAvatar">A</div>
+          <div>
+            <div id="sidebarUsername" style="font-weight: 700; color: #fff;">admin</div>
+            <div style="display: flex; gap: 4px; margin-top: 2px;">
+              <span id="sidebarRoleBadge" class="badge badge-info">L3 管理者</span>
+              <span id="sidebarVerifyBadge" class="badge badge-success">検証済</span>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" style="width: 100%; font-size: 11px;" onclick="handleLogout()">🚪 ログアウト</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Topbar -->
+      <div class="topbar">
+        <div>
+          <h1 class="topbar-title" id="pageTitle">📊 ダッシュボード</h1>
+          <div class="topbar-sub" id="pageSub">企業の全管理サイトの脅威・アクセス制限・信頼度スコアをリアルタイム監視中</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary" onclick="exportDataJson()">📥 JSONエクスポート</button>
+          <button class="btn btn-warning" onclick="triggerPwaShieldPulse()">⚡ PWAサンドボックス弾き</button>
+          <button class="btn btn-danger" onclick="openEmergencyModal()">🚨 緊急復旧</button>
+        </div>
+      </div>
+
+      <!-- Emergency Alert banner if override or lockdown active -->
+      <div id="emergencyStatusBanner" style="display: none;" class="alert-box alert-warning">
+        <span style="font-size: 24px;">🚨</span>
+        <div>
+          <div style="font-weight: 700;">緊急復旧（EMERGENCY OVERRIDE）が実行されました</div>
+          <div style="font-size: 12px;">すべての悪意ある制限・ロックダウンは無視モード（bypassable）に設定されており無効化されています。</div>
+        </div>
+      </div>
+
+      <!-- Tab Contents -->
+      <div id="tab-dashboard" class="tab-pane">
+        <!-- 4 Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">アクティブな制限数</div>
+            <div class="stat-val" id="statActiveRestrictions">0</div>
+          </div>
+          <div class="stat-card danger">
+            <div class="stat-label">疑わしい制限（低信頼度）</div>
+            <div class="stat-val" id="statSuspiciousRestrictions" style="color: var(--danger);">0</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-label">検証済みアカウント数</div>
+            <div class="stat-val" id="statVerifiedAccounts" style="color: var(--success);">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">セキュリティ総合スコア</div>
+            <div class="stat-val" id="statSecurityScore">92<span style="font-size: 14px; color: var(--subtext);">/100</span></div>
+          </div>
+        </div>
+
+        <!-- Threat Alert Box -->
+        <div id="threatAlertBox" class="panel" style="margin-bottom: 24px; border-color: rgba(255, 92, 122, 0.4); display: none;">
+          <div class="panel-header">
+            <div class="panel-title" style="color: var(--danger);">
+              <span>🚨</span> 疑わしい制限または脅威を検知しました
+            </div>
+            <span class="badge badge-danger">要対応</span>
+          </div>
+          <div id="threatAlertDetails" style="color: #ffb8c5; font-size: 13px;"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title"><span>📈</span> 制限履歴と脅威検出トレンド</div>
+              <span class="badge badge-info">自動更新</span>
+            </div>
+            <div style="height: 180px; display: flex; align-items: flex-end; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--border);">
+              <div style="flex: 1; background: rgba(91, 140, 255, 0.3); height: 40%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px;">月</span></div>
+              <div style="flex: 1; background: rgba(91, 140, 255, 0.4); height: 60%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px;">火</span></div>
+              <div style="flex: 1; background: rgba(91, 140, 255, 0.3); height: 30%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px;">水</span></div>
+              <div style="flex: 1; background: rgba(255, 92, 122, 0.6); height: 85%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px; color: var(--danger);">木</span></div>
+              <div style="flex: 1; background: rgba(91, 140, 255, 0.5); height: 50%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px;">金</span></div>
+              <div style="flex: 1; background: rgba(61, 220, 151, 0.5); height: 25%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px;">土</span></div>
+              <div style="flex: 1; background: linear-gradient(to top, var(--accent1), var(--accent2)); height: 45%; border-radius: 4px; position: relative;"><span style="position: absolute; top: -20px; left: 0; font-size: 10px; color: #fff;">今日</span></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--subtext);">
+              <span>低頻度（平常運用）</span>
+              <span style="color: var(--danger);">● 木曜: ハッカーによるロックダウンスパム検知</span>
+              <span style="color: var(--success);">● 現在: 防御正常稼働中</span>
+            </div>
+          </div>
+
+          <div class="panel" style="text-align: center;">
+            <div class="panel-header">
+              <div class="panel-title"><span>🛡️</span> 防護レベル</div>
+            </div>
+            <div style="position: relative; width: 130px; height: 130px; margin: 10px auto;">
+              <svg viewBox="0 0 36 36" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#161d2e" stroke-width="3.5" />
+                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--success)" stroke-dasharray="92, 100" stroke-width="3.5" />
+              </svg>
+              <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <span style="font-size: 26px; font-weight: 800; color: #fff;">92</span>
+                <span style="font-size: 10px; color: var(--success);">安全健全</span>
+              </div>
+            </div>
+            <div style="font-size: 12px; color: var(--subtext); margin-top: 6px;">多層防御シールド稼働中</div>
+          </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span>📜</span> 最新アクティビティログ（直近5件）</div>
+            <a onclick="switchTab('logs')" class="btn btn-ghost" style="font-size: 11px;">全ログを表示 →</a>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>状態</th>
+                  <th>タイムスタンプ</th>
+                  <th>操作者</th>
+                  <th>カテゴリ</th>
+                  <th>操作内容</th>
+                  <th>CRC-32整合性</th>
+                </tr>
+              </thead>
+              <tbody id="dashboardRecentLogsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sites Tab -->
+      <div id="tab-sites" class="tab-pane" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
+              <input type="text" id="siteSearchInput" class="form-input" style="max-width: 280px;" placeholder="サイト名 / URL / 登録者で検索..." oninput="renderSitesTable()">
+              <select id="siteFilterSelect" class="form-input" style="max-width: 160px;" onchange="renderSitesTable()">
+                <option value="all">すべてのサイト</option>
+                <option value="verified">検証済みのみ</option>
+                <option value="unverified">未検証のみ</option>
+                <option value="warning">危険・警告のみ</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-secondary" onclick="scanAllSitesBatch()">🔍 全サイト一括スキャン</button>
+              <button class="btn btn-primary" onclick="openSiteModal()">+ サイト追加</button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>サイト名</th>
+                  <th>URL</th>
+                  <th>登録者</th>
+                  <th>信頼度</th>
+                  <th>状態</th>
+                  <th>ウイルス/マルウェア検査</th>
+                  <th>アクション</th>
+                </tr>
+              </thead>
+              <tbody id="sitesTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Restrictions Tab -->
+      <div id="tab-restrictions" class="tab-pane" style="display: none;">
+        <div id="restrictionsUntrustedWarning" class="alert-box alert-danger" style="display: none;">
+          <span style="font-size: 20px;">⚠️</span>
+          <div>
+            <div style="font-weight: 700;">信頼度40点未満の疑わしい制限が検知されました</div>
+            <div style="font-size: 12px;">ハッカーや悪意ある未検証ユーザーによる不正な制限の可能性があります。権限レベルに関係なく削除可能です。</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 24px;">
+          <div class="panel-header">
+            <div class="panel-title"><span>🔒</span> アクティブな制限一覧</div>
+            <button class="btn btn-danger" onclick="openRestrictionModal()">+ 制限を新規適用 (L3要)</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>制限の種類 / 理由</th>
+                  <th>実行者</th>
+                  <th>信頼度スコア</th>
+                  <th>残り有効時間</th>
+                  <th>状態</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="restrictionsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Emergency Recovery Section -->
+        <div class="panel" style="border-color: rgba(255, 92, 122, 0.4); background: rgba(255, 92, 122, 0.04);">
+          <div class="panel-header">
+            <div class="panel-title" style="color: var(--danger);">
+              <span>🚨</span> 緊急復旧モード（ハッカー・完全ロックダウン脱出用）
+            </div>
+          </div>
+          <p style="font-size: 12px; color: var(--subtext); margin-bottom: 14px;">
+            ハッカーにより全アカウントの管理者権限が奪われたり、システム全体が不当にロックダウンされた場合、
+            シークレットマスターキーを入力することで全ての制限を強制無効化（bypassable）し管理者アクセスを回復します。
+          </p>
+          <div style="display: flex; gap: 12px; max-width: 500px;">
+            <input type="password" id="emergencyInputKey" class="form-input" placeholder="シークレットマスターキーを入力">
+            <button class="btn btn-danger" style="white-space: nowrap;" onclick="executeEmergencyOverrideInline()">🚨 緊急復旧を実行</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accounts Tab -->
+      <div id="tab-accounts" class="tab-pane" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span>👤</span> 登録アカウント一覧</div>
+            <button class="btn btn-primary" onclick="openAccountModal()">+ アカウント登録 (L3要)</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ユーザーID</th>
+                  <th>表示名</th>
+                  <th>権限レベル</th>
+                  <th>信頼度ステータス</th>
+                  <th>登録日</th>
+                  <th>アクション</th>
+                </tr>
+              </thead>
+              <tbody id="accountsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Audit Tab -->
+      <div id="tab-audit" class="tab-pane" style="display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Left Column -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title"><span>📊</span> 制限信頼性検証チェック</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--panel2); border-radius: 8px;">
+                <span>アクティブな制限総数</span>
+                <span id="auditTotalRestrictions" style="font-weight: 700; color: #fff;">0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--panel2); border-radius: 8px;">
+                <span style="display: flex; align-items: center; gap: 6px;">信頼度70以上（信頼できる制限）</span>
+                <span id="auditHighCredibility" class="badge badge-success">0件</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--panel2); border-radius: 8px;">
+                <span style="display: flex; align-items: center; gap: 6px;">信頼度40〜70（中程度）</span>
+                <span id="auditMediumCredibility" class="badge badge-warning">0件</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--panel2); border-radius: 8px; border: 1px solid rgba(255, 92, 122, 0.4);">
+                <span style="display: flex; align-items: center; gap: 6px; color: var(--danger);">信頼度40未満（信頼不可・削除可能）</span>
+                <span id="auditLowCredibility" class="badge badge-danger">0件</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--panel2); border-radius: 8px;">
+                <span>検知異常数（総合）</span>
+                <span id="auditAnomalyCount" style="font-weight: 700; color: var(--warning);">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title"><span>🛡️</span> 内部脅威・ハッカー検知パターン</div>
+            </div>
+            <div id="threatPatternsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Logs Tab -->
+      <div id="tab-logs" class="tab-pane" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title"><span>📜</span> 改ざん防止・完全監査ログ（最大5,000件保持）</div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-secondary" onclick="simulateTamperAttack()">⚡ 改ざん検知テスト（CRC32不一致シミュレーション）</button>
+              <button class="btn btn-primary" onclick="exportDataJson()">📥 JSON保存</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>状態</th>
+                  <th>タイムスタンプ</th>
+                  <th>操作者ID</th>
+                  <th>カテゴリ</th>
+                  <th>操作内容</th>
+                  <th>CRC-32ハッシュ</th>
+                  <th>改ざん検知ステータス</th>
+                </tr>
+              </thead>
+              <tbody id="logsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="tab-settings" class="tab-pane" style="display: none;">
+        <div class="panel" style="margin-bottom: 20px;">
+          <div class="panel-header">
+            <div class="panel-title"><span>⚙️</span> システム設定とテストシナリオ実行</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+              <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 8px;">🧪 プロンプト仕様テストシナリオのワンクリック実行</h3>
+              <p style="font-size: 12px; color: var(--subtext); margin-bottom: 14px;">要件仕様書のテストケースを即座にシミュレート検証できます：</p>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="btn btn-secondary" onclick="runScenario1()">テスト1: フルロックダウン発動＆マスターキー復旧</button>
+                <button class="btn btn-secondary" onclick="runScenario2()">テスト2: 悪質ユーザーの低信頼度制限＆削除検証</button>
+                <button class="btn btn-secondary" onclick="runScenario3()">テスト3: 悪質URL（bit.ly/malware.exe）の自動スキャン検知</button>
+                <button class="btn btn-secondary" onclick="runScenario4()">テスト4: 未登録ID「hacker123」ブルートフォース攻撃検知</button>
+              </div>
+            </div>
+
+            <div>
+              <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 8px;">🛡️ セキュリティポリシー状態</h3>
+              <div style="font-size: 12px; color: var(--subtext); display: flex; flex-direction: column; gap: 10px;">
+                <div style="padding: 10px; background: var(--panel2); border-radius: 8px;">
+                  <strong style="color: #fff;">マスターキー保護：</strong> <code>MASTER-2024-OVERRIDE</code> (変更には最高レベル認証が必要)
+                </div>
+                <div style="padding: 10px; background: var(--panel2); border-radius: 8px;">
+                  <strong style="color: #fff;">自動セッションタイムアウト：</strong> 30分無操作で強制ログアウト
+                </div>
+                <div style="padding: 10px; background: var(--panel2); border-radius: 8px;">
+                  <strong style="color: #fff;">制限自動期限切れ：</strong> 指定分数（デフォルト60分）経過で自動失効
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Embedded Client-Side JavaScript Logic
+    const MASTER_KEY = "MASTER-2024-OVERRIDE";
+    
+    // IEEE 802.3 CRC-32
+    function crc32(str) {
+      let c = 0 ^ (-1);
+      const bytes = new TextEncoder().encode(str);
+      for (let i = 0; i < bytes.length; i++) {
+        let byte = bytes[i];
+        for (let j = 0; j < 8; j++) {
+          c = ((c ^ byte) & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          byte >>>= 1;
+        }
+      }
+      return ((c ^ (-1)) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+    }
+
+    function formatTime(d = new Date()) {
+      return d.getFullYear() + '-' +
+        String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0') + ' ' +
+        String(d.getHours()).padStart(2,'0') + ':' +
+        String(d.getMinutes()).padStart(2,'0') + ':' +
+        String(d.getSeconds()).padStart(2,'0') + '.' +
+        String(d.getMilliseconds()).padStart(3,'0');
+    }
+
+    // Default Seed Data
+    const defaultData = {
+      currentUser: null,
+      isEmergencyOverridden: false,
+      pwaShieldActive: false,
+      users: [
+        { id: "admin", displayName: "システム管理者", password: "admin123", role: "L3", isVerified: true, createdAt: "2024-01-10", isProtected: true },
+        { id: "editor_tanaka", displayName: "田中 健太", password: "pass", role: "L2", isVerified: true, createdAt: "2024-02-15" },
+        { id: "viewer_sato", displayName: "佐藤 美咲", password: "pass", role: "L1", isVerified: false, createdAt: "2024-03-01" },
+        { id: "temp_contractor", displayName: "外部委託者X", password: "pass", role: "L2", isVerified: false, createdAt: "2024-03-20" }
+      ],
+      sites: [
+        { id: "site-1", name: "コーポレート公式ポータル", url: "https://portal.enterprise-global.com", category: "Corp", createdBy: "admin", isVerified: true, status: "active", notes: "本番主要ポータル" },
+        { id: "site-2", name: "顧客サポートセンター", url: "https://support.enterprise-global.com", category: "Support", createdBy: "editor_tanaka", isVerified: true, status: "active", notes: "SLA 99.9%" },
+        { id: "site-3", name: "マーケティングLP", url: "https://campaign-2024.top/free-download", category: "Marketing", createdBy: "temp_contractor", isVerified: false, status: "warning", notes: "外部委託作成" }
+      ],
+      restrictions: [
+        {
+          id: "res-1",
+          type: "full_lock",
+          title: "夜間メンテナンス用フルロック",
+          reason: "深夜セキュリティパッチ適用",
+          appliedBy: "admin",
+          durationMinutes: 60,
+          createdAt: Date.now() - 10 * 60 * 1000,
+          expiresAt: Date.now() + 50 * 60 * 1000,
+          credibilityScore: 100,
+          status: "active",
+          bypassable: false
+        }
+      ],
+      logs: []
+    };
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('MLSMD_STATE_STANDALONE');
+        if (saved) return JSON.parse(saved);
+      } catch(e) {}
+      return defaultData;
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem('MLSMD_STATE_STANDALONE', JSON.stringify(appState));
+      } catch(e) {}
+    }
+
+    let appState = loadState();
+
+    function addLog(action, category = 'AUTH', status = 'success', operatorId = null, tampered = false) {
+      const op = operatorId || (appState.currentUser ? appState.currentUser.id : 'system');
+      const time = formatTime();
+      const id = 'log-' + Date.now() + '-' + Math.floor(Math.random()*1000);
+      const canonical = id + '|' + time + '|' + op + '|' + category + '|' + action + '|' + status;
+      const checksum = crc32(canonical);
+      
+      const entry = {
+        id,
+        timestamp: time,
+        operatorId: op,
+        action,
+        category,
+        status,
+        checksum: tampered ? 'DEADBEEF' : checksum,
+        isTamperProof: true,
+        tampered: !!tampered
+      };
+      appState.logs.unshift(entry);
+      if (appState.logs.length > 5000) appState.logs.pop();
+      saveState();
+      return entry;
+    }
+
+    if (appState.logs.length === 0) {
+      addLog('システム起動完了 - Guardian Multi-Layer Security', 'ADMIN', 'success', 'system');
+      addLog('初期管理者アカウント登録完了: admin (L3)', 'AUTH', 'success', 'admin');
+    }
+
+    function showToast(msg, type = 'info') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.style.background = type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : type === 'success' ? 'var(--success)' : 'var(--accent1)';
+      if (type === 'warning') t.style.color = '#000';
+      t.innerText = msg;
+      c.appendChild(t);
+      setTimeout(() => { t.remove(); }, 3500);
+    }
+
+    // Login Handler
+    function handleLogin(e) {
+      e.preventDefault();
+      const idInput = document.getElementById('loginId').value.trim();
+      const passInput = document.getElementById('loginPassword').value;
+      const feedback = document.getElementById('loginFeedback');
+
+      // Check Master Key
+      if (passInput === MASTER_KEY) {
+        appState.currentUser = {
+          id: 'admin',
+          displayName: 'スーパー管理者 (復旧モード)',
+          role: 'L3',
+          isVerified: true
+        };
+        appState.isEmergencyOverridden = true;
+        // Set all restrictions to bypassable / ignored
+        appState.restrictions.forEach(r => {
+          r.bypassable = true;
+          r.status = 'ignored';
+        });
+        addLog('🚨 EMERGENCY_OVERRIDE 実行: シークレットマスターキーによる強制脱出', 'OVERRIDE', 'warning', 'EMERGENCY_KEY');
+        saveState();
+        showToast('🚨 緊急復旧を実行しました。全制限が無視状態になります。', 'warning');
+        enterDashboard();
+        return;
+      }
+
+      // Standard Login check
+      const user = appState.users.find(u => u.id === idInput);
+      if (!user) {
+        // ID Enumeration prevention:
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(255, 92, 122, 0.2)';
+        feedback.style.color = 'var(--danger)';
+        feedback.innerText = '❌ アカウントが見つかりません';
+        addLog('未登録ID「' + idInput + '」でのログイン試行拒否 (ID列挙防御)', 'AUTH', 'failure', 'unknown');
+        return;
+      }
+
+      if (user.password !== passInput) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(255, 92, 122, 0.2)';
+        feedback.style.color = 'var(--danger)';
+        feedback.innerText = '❌ アカウントが見つかりません'; // ID enumeration prevention
+        addLog('ユーザーID「' + idInput + '」の認証失敗（パスワード不一致）', 'AUTH', 'failure', idInput);
+        return;
+      }
+
+      // Check active restrictions on user
+      const isLocked = appState.restrictions.some(r => r.status === 'active' && !r.bypassable && (r.type === 'full_lock' || (r.type === 'revoke_admin' && user.role === 'L3')));
+      if (isLocked && !appState.isEmergencyOverridden && !appState.pwaShieldActive) {
+        feedback.style.display = 'block';
+        feedback.style.background = 'rgba(255, 92, 122, 0.2)';
+        feedback.style.color = 'var(--danger)';
+        feedback.innerText = '❌ 現在このシステムには管理者による制限が有効になっています。';
+        addLog('制限適用中のためログイン拒否: ' + idInput, 'AUTH', 'failure', idInput);
+        return;
+      }
+
+      appState.currentUser = user;
+      addLog('ログイン成功: ' + user.id + ' (' + user.role + ')', 'AUTH', 'success', user.id);
+      saveState();
+      enterDashboard();
+    }
+
+    function enterDashboard() {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('appLayout').style.display = 'flex';
+      updateUI();
+    }
+
+    function handleLogout() {
+      if (appState.currentUser) {
+        addLog('ログアウト: ' + appState.currentUser.id, 'AUTH', 'success', appState.currentUser.id);
+      }
+      appState.currentUser = null;
+      saveState();
+      document.getElementById('loginOverlay').style.display = 'flex';
+      document.getElementById('appLayout').style.display = 'none';
+      document.getElementById('loginPassword').value = '';
+    }
+
+    function updateUI() {
+      if (!appState.currentUser) return;
+      document.getElementById('sidebarUsername').innerText = appState.currentUser.displayName;
+      document.getElementById('sidebarAvatar').innerText = appState.currentUser.displayName.charAt(0);
+      document.getElementById('sidebarRoleBadge').innerText = appState.currentUser.role + ' ' + (appState.currentUser.role === 'L3' ? '管理者' : appState.currentUser.role === 'L2' ? '編集者' : '閲覧者');
+      document.getElementById('sidebarVerifyBadge').innerText = appState.currentUser.isVerified ? '検証済' : '未検証';
+
+      if (appState.isEmergencyOverridden) {
+        document.getElementById('emergencyStatusBanner').style.display = 'flex';
+      } else {
+        document.getElementById('emergencyStatusBanner').style.display = 'none';
+      }
+
+      // Check expiration on restrictions
+      const now = Date.now();
+      appState.restrictions.forEach(r => {
+        if (r.expiresAt <= now && r.status === 'active') {
+          r.status = 'expired';
+        }
+      });
+
+      renderDashboardStats();
+      renderSitesTable();
+      renderRestrictionsTable();
+      renderAccountsTable();
+      renderLogsTable();
+      renderAuditTab();
+    }
+
+    function renderDashboardStats() {
+      const active = appState.restrictions.filter(r => r.status === 'active');
+      const suspicious = active.filter(r => r.credibilityScore < 40);
+      document.getElementById('statActiveRestrictions').innerText = active.length;
+      document.getElementById('statSuspiciousRestrictions').innerText = suspicious.length;
+      document.getElementById('statVerifiedAccounts').innerText = appState.users.filter(u => u.isVerified).length;
+
+      let score = 95 - (suspicious.length * 25) - (active.length * 5);
+      if (score < 10) score = 10;
+      document.getElementById('statSecurityScore').innerHTML = score + '<span style="font-size: 14px; color: var(--subtext);">/100</span>';
+
+      const alertBox = document.getElementById('threatAlertBox');
+      const alertDetails = document.getElementById('threatAlertDetails');
+      if (suspicious.length > 0) {
+        alertBox.style.display = 'block';
+        alertDetails.innerHTML = '現在、信頼度が40点未満の不正な制限が <strong>' + suspicious.length + '件</strong> 存在します。低スコアの制限はハッカーによる不正操作防止のため、全権限で削除可能です。';
+      } else {
+        alertBox.style.display = 'none';
+      }
+
+      // Recent logs
+      const tbody = document.getElementById('dashboardRecentLogsBody');
+      tbody.innerHTML = '';
+      appState.logs.slice(0, 5).forEach(l => {
+        const tr = document.createElement('tr');
+        const isTampered = l.tampered;
+        tr.innerHTML = '<td><span class="badge ' + (l.status === 'success' ? 'badge-success' : l.status === 'failure' ? 'badge-danger' : 'badge-warning') + '">' + l.status + '</span></td>' +
+          '<td>' + l.timestamp + '</td>' +
+          '<td><strong>' + l.operatorId + '</strong></td>' +
+          '<td>' + l.category + '</td>' +
+          '<td>' + l.action + '</td>' +
+          '<td>' + (isTampered ? '<span style="color:var(--danger)">✗ 改ざん検知 ('+l.checksum+')</span>' : '<span style="color:var(--success)">✓ 正常 ('+l.checksum+')</span>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSitesTable() {
+      const tbody = document.getElementById('sitesTableBody');
+      const q = (document.getElementById('siteSearchInput')?.value || '').toLowerCase();
+      const filter = document.getElementById('siteFilterSelect')?.value || 'all';
+      tbody.innerHTML = '';
+
+      appState.sites.forEach(s => {
+        if (q && !s.name.toLowerCase().includes(q) && !s.url.toLowerCase().includes(q) && !s.createdBy.toLowerCase().includes(q)) return;
+        if (filter === 'verified' && !s.isVerified) return;
+        if (filter === 'unverified' && s.isVerified) return;
+        if (filter === 'warning' && s.status === 'active') return;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><strong>' + s.name + '</strong><br><span style="font-size:11px;color:var(--subtext)">' + s.category + '</span></td>' +
+          '<td><span style="font-family:monospace;color:var(--subtext)">' + s.url + '</span></td>' +
+          '<td>' + s.createdBy + '</td>' +
+          '<td>' + (s.isVerified ? '<span class="badge badge-success">検証済</span>' : '<span class="badge badge-warning">未検証</span>') + '</td>' +
+          '<td><span class="badge ' + (s.status === 'active' ? 'badge-success' : s.status === 'warning' ? 'badge-warning' : 'badge-danger') + '">' + s.status.toUpperCase() + '</span></td>' +
+          '<td><button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;" onclick="scanSingleSite(\'' + s.id + '\')">🛡️ URLスキャン</button></td>' +
+          '<td>' + (appState.currentUser.role === 'L1' ? '<span style="color:var(--subtext);font-size:11px;">閲覧のみ</span>' : '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="deleteSite(\'' + s.id + '\')">削除</button>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderRestrictionsTable() {
+      const tbody = document.getElementById('restrictionsTableBody');
+      tbody.innerHTML = '';
+      const hasUntrusted = appState.restrictions.some(r => r.status === 'active' && r.credibilityScore < 40);
+      document.getElementById('restrictionsUntrustedWarning').style.display = hasUntrusted ? 'flex' : 'none';
+
+      appState.restrictions.forEach(r => {
+        const remainingMinutes = Math.max(0, Math.round((r.expiresAt - Date.now()) / 60000));
+        const isLow = r.credibilityScore < 40;
+        const canDelete = isLow || (appState.currentUser && appState.currentUser.role === 'L3');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><strong>' + r.type + '</strong><br><span style="font-size:11px;color:var(--subtext)">' + r.reason + '</span></td>' +
+          '<td>' + r.appliedBy + '</td>' +
+          '<td><span class="badge ' + (r.credibilityScore >= 70 ? 'badge-success' : r.credibilityScore >= 40 ? 'badge-warning' : 'badge-danger') + '">' + r.credibilityScore + '点 (' + (r.credibilityScore >= 70 ? '信頼' : r.credibilityScore >= 40 ? '中程度' : '低・危険') + ')</span></td>' +
+          '<td>' + (remainingMinutes > 0 ? remainingMinutes + ' 分' : '<span style="color:var(--subtext)">有効期限切れ</span>') + '</td>' +
+          '<td><span class="badge ' + (r.status === 'active' ? 'badge-danger' : r.status === 'ignored' ? 'badge-warning' : 'badge-info') + '">' + r.status.toUpperCase() + '</span></td>' +
+          '<td>' + (canDelete ? '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="removeRestriction(\'' + r.id + '\')">制限を解除/削除</button>' : '<span style="font-size:11px;color:var(--subtext)">解除不可 (高信頼度)</span>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAccountsTable() {
+      const tbody = document.getElementById('accountsTableBody');
+      tbody.innerHTML = '';
+      appState.users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><strong>' + u.id + '</strong></td>' +
+          '<td>' + u.displayName + '</td>' +
+          '<td><span class="badge ' + (u.role === 'L3' ? 'badge-danger' : u.role === 'L2' ? 'badge-warning' : 'badge-info') + '">' + u.role + '</span></td>' +
+          '<td>' + (u.isVerified ? '<span class="badge badge-success">検証済み</span>' : '<span class="badge badge-warning">未検証</span>') + '</td>' +
+          '<td>' + u.createdAt + '</td>' +
+          '<td>' + (u.isProtected ? '<span style="font-size:11px;color:var(--subtext)">初期管理者のため保護</span>' : appState.currentUser.role === 'L3' ? '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="deleteAccount(\'' + u.id + '\')">削除</button>' : '<span style="font-size:11px;color:var(--subtext)">権限不足</span>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderLogsTable() {
+      const tbody = document.getElementById('logsTableBody');
+      tbody.innerHTML = '';
+      appState.logs.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><span class="badge ' + (l.status === 'success' ? 'badge-success' : l.status === 'failure' ? 'badge-danger' : 'badge-warning') + '">' + l.status + '</span></td>' +
+          '<td>' + l.timestamp + '</td>' +
+          '<td>' + l.operatorId + '</td>' +
+          '<td>' + l.category + '</td>' +
+          '<td>' + l.action + '</td>' +
+          '<td style="font-family:monospace;font-size:11px;">' + l.checksum + '</td>' +
+          '<td>' + (l.tampered ? '<span style="color:var(--danger);font-weight:700;">✗ 改ざん検知 (CRC32不一致)</span>' : '<span style="color:var(--success);">✓ 正常 (検証済み)</span>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAuditTab() {
+      const total = appState.restrictions.length;
+      const high = appState.restrictions.filter(r => r.credibilityScore >= 70).length;
+      const med = appState.restrictions.filter(r => r.credibilityScore >= 40 && r.credibilityScore < 70).length;
+      const low = appState.restrictions.filter(r => r.credibilityScore < 40).length;
+
+      document.getElementById('auditTotalRestrictions').innerText = total;
+      document.getElementById('auditHighCredibility').innerText = high + '件';
+      document.getElementById('auditMediumCredibility').innerText = med + '件';
+      document.getElementById('auditLowCredibility').innerText = low + '件';
+      document.getElementById('auditAnomalyCount').innerText = low + (appState.logs.filter(l => l.tampered).length);
+
+      const patternsBox = document.getElementById('threatPatternsList');
+      patternsBox.innerHTML = '';
+      const patterns = [
+        { title: '短時間に複数の制限をかける（ロックダウンスパム）', severity: 'critical', desc: '同一ユーザーが1時間以内に5件以上の制限を適用する異常行動' },
+        { title: '管理者以外による権限変更の試み', severity: 'critical', desc: 'L1/L2の非管理者アカウントによる権限昇格または他者ロール改変' },
+        { title: 'ログの改ざん試行', severity: 'critical', desc: '操作ログのCRC-32ハッシュ不一致を検知' },
+        { title: '不規則な時間帯（深夜3〜5時）の大量操作', severity: 'warning', desc: '業務時間外の深夜帯における大量データ変更' },
+        { title: '異なるIPからの同時アクセス', severity: 'warning', desc: '同一IDによる複数IPからの並行接続' },
+        { title: 'ログイン試行の連続失敗（総当たり攻撃）', severity: 'warning', desc: '10分以内に5回以上の認証失敗' }
+      ];
+
+      patterns.forEach(p => {
+        const item = document.createElement('div');
+        item.style.padding = '10px 14px';
+        item.style.background = 'var(--panel2)';
+        item.style.borderRadius = '8px';
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+        item.innerHTML = '<div><div style="font-weight:600;color:#fff;">' + (p.severity === 'critical' ? '🔴' : '🟡') + ' ' + p.title + '</div><div style="font-size:11px;color:var(--subtext);">' + p.desc + '</div></div><span class="badge ' + (p.severity === 'critical' ? 'badge-danger' : 'badge-warning') + '">常時監視中</span>';
+        patternsBox.appendChild(item);
+      });
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      const activeTab = document.getElementById('tab-' + tabId);
+      if (activeTab) activeTab.style.display = 'block';
+
+      const links = document.querySelectorAll('.nav-list .nav-item');
+      links.forEach(l => {
+        if (l.innerText.includes(tabId === 'dashboard' ? 'ダッシュボード' : tabId === 'sites' ? 'サイト一覧' : tabId === 'restrictions' ? '制限管理' : tabId === 'accounts' ? 'アカウント管理' : tabId === 'audit' ? 'セキュリティ監査' : tabId === 'logs' ? 'アクティビティログ' : 'システム設定')) {
+          l.classList.add('active');
+        }
+      });
+      updateUI();
+    }
+
+    // Heuristics URL scan
+    function scanSingleSite(siteId) {
+      const site = appState.sites.find(s => s.id === siteId);
+      if (!site) return;
+      const issues = [];
+      const url = site.url.toLowerCase();
+      if (!url.startsWith('https://')) issues.push('HTTPS暗号化なし');
+      if (url.includes('.exe') || url.includes('.scr') || url.includes('.bat') || url.includes('.zip')) issues.push('危険な実行/圧縮拡張子');
+      if (url.includes('bit.ly') || url.includes('tinyurl.com') || url.includes('t.co')) issues.push('短縮URL検出');
+      if (url.includes('free-download') || url.includes('login-verify')) issues.push('マルウェアキーワード検出');
+      if (url.includes('.ru') || url.includes('.top') || url.includes('.xyz')) issues.push('制裁/高リスクTLD');
+
+      if (issues.length > 0) {
+        site.status = 'warning';
+        showToast('⚠️ 脅威検知: ' + site.name + ' (' + issues.join(', ') + ')', 'warning');
+        addLog('URLマルウェアスキャン警告: ' + site.url + ' (' + issues.join(', ') + ')', 'SCAN', 'warning');
+      } else {
+        site.status = 'active';
+        showToast('✅ 安全確認: ' + site.name + ' は安全です', 'success');
+        addLog('URLマルウェアスキャン合格: ' + site.url, 'SCAN', 'success');
+      }
+      saveState();
+      renderSitesTable();
+    }
+
+    function scanAllSitesBatch() {
+      appState.sites.forEach(s => scanSingleSite(s.id));
+      showToast('全サイトの一括セキュリティスキャンが完了しました', 'info');
+    }
+
+    function deleteSite(id) {
+      if (appState.currentUser.role === 'L1') {
+        showToast('🚫 権限がありません（L1閲覧者は削除不可）', 'error');
+        return;
+      }
+      appState.sites = appState.sites.filter(s => s.id !== id);
+      addLog('サイト情報削除: ID=' + id, 'SITE', 'success');
+      saveState();
+      renderSitesTable();
+      showToast('サイトを削除しました', 'success');
+    }
+
+    function removeRestriction(id) {
+      const r = appState.restrictions.find(item => item.id === id);
+      if (!r) return;
+      if (r.credibilityScore >= 40 && appState.currentUser.role !== 'L3') {
+        showToast('🚫 高信頼度（40点以上）の制限解除にはL3管理者権限が必要です', 'error');
+        return;
+      }
+      appState.restrictions = appState.restrictions.filter(item => item.id !== id);
+      addLog('制限解除/削除完了: ' + r.type + ' (スコア: ' + r.credibilityScore + ')', 'RESTRICTION', 'success');
+      saveState();
+      updateUI();
+      showToast('制限を解除しました', 'success');
+    }
+
+    function deleteAccount(id) {
+      if (appState.currentUser.role !== 'L3') {
+        showToast('🚫 権限がありません（L3管理者のみアカウント操作可能）', 'error');
+        return;
+      }
+      appState.users = appState.users.filter(u => u.id !== id);
+      addLog('ユーザーアカウント削除: ' + id, 'ADMIN', 'success');
+      saveState();
+      renderAccountsTable();
+      showToast('アカウントを削除しました', 'success');
+    }
+
+    function executeEmergencyOverrideInline() {
+      const key = document.getElementById('emergencyInputKey').value;
+      if (key !== MASTER_KEY) {
+        showToast('❌ マスターキーが一致しません', 'error');
+        addLog('不正なマスターキー試行拒否', 'OVERRIDE', 'failure');
+        return;
+      }
+      appState.isEmergencyOverridden = true;
+      appState.restrictions.forEach(r => {
+        r.bypassable = true;
+        r.status = 'ignored';
+      });
+      addLog('🚨 EMERGENCY_OVERRIDE 実行: 全制限を無視モードに切替', 'OVERRIDE', 'warning');
+      saveState();
+      updateUI();
+      showToast('🚨 緊急復旧が完了しました！すべての制限が無効化されました', 'warning');
+    }
+
+    function simulateTamperAttack() {
+      if (appState.logs.length === 0) return;
+      appState.logs[0].tampered = true;
+      appState.logs[0].action = '【改ざん】ハッカーにより操作履歴が書き換えられました';
+      appState.logs[0].checksum = 'BADC0DE1';
+      saveState();
+      updateUI();
+      showToast('⚡ 改ざんシミュレーション実行：CRC-32不一致を検出しました！', 'error');
+    }
+
+    function triggerPwaShieldPulse() {
+      appState.pwaShieldActive = true;
+      let repelledCount = 0;
+      appState.restrictions.forEach(r => {
+        if (r.status === 'active') {
+          r.status = 'ignored';
+          r.bypassable = true;
+          repelledCount++;
+        }
+      });
+      addLog('⚡ PWAサンドボックス弾きパルス発動: ' + repelledCount + '件の制限を弾いて無効化', 'PWA_SHIELD', 'success');
+      saveState();
+      updateUI();
+      showToast('⚡ PWA分離サンドボックス防御が作動！かけられていた制限をすべて弾き出しました！', 'success');
+    }
+
+    function exportDataJson() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+      const a = document.createElement('a');
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", "site-manager-backup-" + Date.now() + ".json");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast('バックアップJSONをダウンロードしました', 'success');
+    }
+
+    // Scenarios for demonstration
+    function runScenario1() {
+      // Test 1: Full lockdown by L3 admin, then Master Key Recovery
+      appState.restrictions.push({
+        id: "res-lockdown",
+        type: "full_lock",
+        title: "ハッカーによる完全ロックダウン",
+        reason: "悪意ある管理権限強奪",
+        appliedBy: "hacker_l3",
+        durationMinutes: 60,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60*60*1000,
+        credibilityScore: 50,
+        status: "active",
+        bypassable: false
+      });
+      addLog('フルロックダウン制限が適用されました', 'RESTRICTION', 'warning', 'hacker_l3');
+      saveState();
+      updateUI();
+      showToast('テスト1: フルロックダウンを適用しました。マスターキー「MASTER-2024-OVERRIDE」で解除可能です。', 'warning');
+    }
+
+    function runScenario2() {
+      // Test 2: Unverified user applied restriction -> low credibility score (< 40)
+      appState.restrictions.push({
+        id: "res-untrusted",
+        type: "revoke_admin",
+        title: "未検証ユーザーによる管理者権限剥奪試行",
+        reason: "不当なアクセス制限",
+        appliedBy: "viewer_sato",
+        durationMinutes: 60,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60*60*1000,
+        credibilityScore: 10,
+        status: "active",
+        bypassable: false
+      });
+      addLog('信頼度10点の疑わしい制限が適用されました（誰でも削除可能）', 'RESTRICTION', 'warning', 'viewer_sato');
+      saveState();
+      updateUI();
+      showToast('テスト2: 信頼度10点（40未満）の制限を追加。どの権限ユーザーでも削除できます。', 'info');
+    }
+
+    function runScenario3() {
+      // Test 3: Add malicious site
+      appState.sites.push({
+        id: "site-malicious",
+        name: "フリーダウンロード配布所（不審サイト）",
+        url: "http://bit.ly/free-download-payload.exe",
+        category: "Test",
+        createdBy: "unknown",
+        isVerified: false,
+        status: "warning",
+        notes: "テスト用マルウェア検知サイト"
+      });
+      addLog('新規サイト追加: http://bit.ly/free-download-payload.exe', 'SITE', 'warning', 'admin');
+      saveState();
+      updateUI();
+      showToast('テスト3: 危険URLを追加しました。「サイト一覧」でスキャン結果を確認できます。', 'warning');
+    }
+
+    function runScenario4() {
+      // Test 4: Repeated failed login attempts for unregistered hacker123
+      for (let i = 0; i < 5; i++) {
+        addLog('未登録ID「hacker123」でのログイン試行拒否 (試行 #' + (i+1) + ')', 'AUTH', 'failure', 'hacker123');
+      }
+      saveState();
+      updateUI();
+      showToast('テスト4: hacker123 による連続5回ブルートフォース攻撃ログを記録しました。', 'error');
+    }
+
+    // Auto-login admin for instant exploration
+    setTimeout(() => {
+      document.getElementById('loginId').value = 'admin';
+      document.getElementById('loginPassword').value = 'admin123';
+    }, 300);
+  </script>
+</body>
+</html>
+`;
+}

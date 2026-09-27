@@ -1,0 +1,6 @@
+{
+  "name": "Multi-Layer Security Site Management Dashboard",
+  "description": "Multi-Layer Security Site Management Dashboard (MLSMD) with master key override, anti-tamper CRC32 logging, heuristic malware scanner, credibility scoring, and PWA isolation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

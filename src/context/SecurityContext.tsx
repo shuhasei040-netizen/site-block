@@ -21,6 +21,11 @@ import {
   sendInstantSecurityNotification,
 } from '../utils/backdoorScanner';
 import { runPostureSimulation, PostureEvaluationReport } from '../utils/postureSimulator';
+import {
+  executeEmergencyVerificationAndPatch,
+  EmergencyPatchResult,
+  BackdoorVulnerabilityItem,
+} from '../utils/emergencyPatcher';
 
 export const MASTER_KEY = 'MASTER-2024-OVERRIDE';
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes inactivity timeout
@@ -43,6 +48,8 @@ export interface SecurityContextType {
   isPostureEvaluating: boolean;
   runPostureEvaluation: () => Promise<PostureEvaluationReport>;
   autoHardenVulnerabilities: () => { fixedCount: number; details: string[] };
+  executeEmergencyPatch: () => Promise<EmergencyPatchResult>;
+  lastEmergencyPatchResult: EmergencyPatchResult | null;
   requestNotificationPermission: () => Promise<NotificationPermission>;
   notificationPermission: NotificationPermission;
   login: (id: string, pass: string) => { success: boolean; message: string; isOverride?: boolean };
@@ -463,6 +470,45 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     return { fixedCount, details };
   }, [pwaShieldActive]);
+
+  const [lastEmergencyPatchResult, setLastEmergencyPatchResult] = useState<EmergencyPatchResult | null>(null);
+
+  const executeEmergencyPatch = useCallback(async (): Promise<EmergencyPatchResult> => {
+    // 1. Establish emergency remote verification channel & override lock
+    setIsEmergencyOverridden(true);
+
+    const { patchedRestrictions, patchedAccounts, patchResult } = executeEmergencyVerificationAndPatch(
+      restrictions,
+      accounts,
+      sites
+    );
+
+    setRestrictions(patchedRestrictions);
+    setAccounts(patchedAccounts);
+    setLastEmergencyPatchResult(patchResult);
+
+    if (!currentUser || currentUser.role !== 'L3') {
+      const emergencyAdmin: UserAccount = {
+        id: currentUser ? currentUser.id : 'admin',
+        displayName: '最高システム管理者 (緊急遠隔検証・パッチ適用済)',
+        password: '***',
+        role: 'L3',
+        isVerified: true,
+        createdAt: '2024-01-10',
+        isProtected: true,
+      };
+      setCurrentUser(emergencyAdmin);
+    }
+
+    addLogEntry(
+      `🚨 ロック制限下における緊急遠隔検証アクセス確立 ＆ 脆弱性閉塞パッチ適用完了 (閉塞数:${patchResult.patchedVulnerabilities.length}, 復旧トークン:${patchResult.verificationToken})`,
+      'OVERRIDE',
+      'success',
+      currentUser?.id || 'EMERGENCY_PATCHER'
+    );
+
+    return patchResult;
+  }, [restrictions, accounts, sites, currentUser, addLogEntry]);
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -1148,6 +1194,8 @@ export const SecurityProvider: React.FC<{ children: ReactNode }> = ({ children }
         isPostureEvaluating,
         runPostureEvaluation,
         autoHardenVulnerabilities,
+        executeEmergencyPatch,
+        lastEmergencyPatchResult,
         requestNotificationPermission,
         notificationPermission,
         login,

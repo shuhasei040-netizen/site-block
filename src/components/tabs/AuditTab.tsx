@@ -50,6 +50,8 @@ export const AuditTab: React.FC = () => {
     isPostureEvaluating,
     runPostureEvaluation,
     autoHardenVulnerabilities,
+    executeEmergencyPatch,
+    lastEmergencyPatchResult,
     notificationPermission,
     requestNotificationPermission,
     applyRestriction,
@@ -60,6 +62,8 @@ export const AuditTab: React.FC = () => {
 
   const [expandedScenarioId, setExpandedScenarioId] = useState<string | null>(null);
   const [hardenFeedback, setHardenFeedback] = useState<{ count: number; details: string[] } | null>(null);
+  const [isEmergencyPatchRunning, setIsEmergencyPatchRunning] = useState<boolean>(false);
+  const [emergencyPatchNotice, setEmergencyPatchNotice] = useState<string | null>(null);
 
   // URL指定型・通信経路侵入診断ステート
   const [targetUrlInput, setTargetUrlInput] = useState<string>('https://suspicious-external-c2.net:8443/ws');
@@ -187,6 +191,22 @@ export const AuditTab: React.FC = () => {
           )}
 
           <button
+            onClick={async () => {
+              setIsEmergencyPatchRunning(true);
+              const res = await executeEmergencyPatch();
+              setIsEmergencyPatchRunning(false);
+              setEmergencyPatchNotice(`緊急遠隔検証アクセスを確立し、${res.patchedVulnerabilities.length}件のバックドア・脆弱性に閉塞パッチを適用しました（トークン: ${res.verificationToken}）`);
+              setTimeout(() => setEmergencyPatchNotice(null), 8000);
+            }}
+            disabled={isEmergencyPatchRunning}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#ff5c7a]/50 bg-[#ff5c7a]/15 hover:bg-[#ff5c7a]/25 text-xs font-bold text-[#ff5c7a] transition cursor-pointer active:scale-95"
+            title="対象サイトによるロック制限下において、残存バックドア通信経路を介して緊急遠隔検証アクセスを確立し、脆弱性パッチ（閉塞）を適用"
+          >
+            <Wrench className={`w-3.5 h-3.5 ${isEmergencyPatchRunning ? 'animate-spin' : ''}`} />
+            <span>{isEmergencyPatchRunning ? '閉塞パッチ適用中...' : '🚨 緊急検証＆閉塞パッチ'}</span>
+          </button>
+
+          <button
             onClick={() => {
               const res = runDeepBackdoorAudit(true);
             }}
@@ -197,6 +217,32 @@ export const AuditTab: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Emergency Patch Feedback Banner */}
+      {emergencyPatchNotice && (
+        <div className="p-4 rounded-xl bg-[#3ddc97]/15 border border-[#3ddc97]/40 text-xs text-[#3ddc97] flex items-start justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-sm">✅ ロック制限下の緊急遠隔検証アクセス確立 ＆ 閉塞パッチ適用完了</div>
+              <div className="text-xs text-[#e8ecf6] mt-1">{emergencyPatchNotice}</div>
+              {lastEmergencyPatchResult && lastEmergencyPatchResult.actionsTaken.length > 0 && (
+                <ul className="mt-2 list-disc list-inside space-y-0.5 text-[11px] text-[#cbd5e1]">
+                  {lastEmergencyPatchResult.actionsTaken.map((act, i) => (
+                    <li key={i}>{act}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setEmergencyPatchNotice(null)}
+            className="text-[#8b96b8] hover:text-white text-xs font-bold cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 模擬侵入テスト＆システム防御態勢評価（Posture Evaluation & Threat Simulation） */}
       <div className="rounded-xl border border-[#5b8cff]/30 bg-[#0f1420] p-5 shadow-lg space-y-5">

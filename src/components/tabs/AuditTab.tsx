@@ -31,10 +31,12 @@ import {
   HardDrive,
   ArrowDownCircle,
 } from 'lucide-react';
+import { SiteItem } from '../../types/security';
 import { useSecurity } from '../../context/SecurityContext';
 import { analyzeThreatPatterns } from '../../utils/threatEngine';
 import { simulateUrlPenetrationRoute, UrlRouteSimulationReport } from '../../utils/urlRouteSimulator';
 import { simulateInboundDevicePenetration, InboundPenetrationReport } from '../../utils/inboundPenetrationSimulator';
+import { SafeAccessModal } from '../modals/SafeAccessModal';
 
 export const AuditTab: React.FC = () => {
   const {
@@ -72,6 +74,7 @@ export const AuditTab: React.FC = () => {
   const [urlDiagnosticMode, setUrlDiagnosticMode] = useState<'both' | 'outbound' | 'inbound'>('both');
   const [isSimulatingRoute, setIsSimulatingRoute] = useState<boolean>(false);
   const [urlBlockSuccessMsg, setUrlBlockSuccessMsg] = useState<string | null>(null);
+  const [auditSafeAccessSite, setAuditSafeAccessSite] = useState<SiteItem | null>(null);
 
   useEffect(() => {
     if (!postureReport && !isPostureEvaluating) {
@@ -534,6 +537,33 @@ export const AuditTab: React.FC = () => {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSimulatingRoute ? 'animate-spin' : ''}`} />
               <span>{isSimulatingRoute ? '通信経路を診断中...' : '侵入経路テストを実行'}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={!targetUrlInput.trim()}
+              onClick={() => {
+                const raw = targetUrlInput.trim();
+                if (!raw) return;
+                const fullUrl = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+                const dummySite: SiteItem = {
+                  id: 'audit-target-' + Date.now(),
+                  name: urlSimulationReport?.hostname || raw,
+                  url: fullUrl,
+                  category: '安全検証対象',
+                  createdBy: '監査担当者',
+                  isVerified: false,
+                  status: urlSimulationReport && urlSimulationReport.riskScore > 60 ? 'danger' : 'warning',
+                  notes: 'セキュリティ監査画面からの安全確認アクセス',
+                  createdAt: new Date().toISOString(),
+                };
+                setAuditSafeAccessSite(dummySite);
+              }}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-[#5b8cff]/50 bg-[#5b8cff]/15 hover:bg-[#5b8cff]/25 text-xs font-bold text-[#5b8cff] transition active:scale-95 shadow-md cursor-pointer shrink-0"
+              title="安全確認のためにこの対象サイトに安全アクセス"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>🛡️ 安全確認アクセス</span>
             </button>
           </form>
 
@@ -1132,6 +1162,13 @@ export const AuditTab: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Safe Verification Access Modal */}
+      <SafeAccessModal
+        site={auditSafeAccessSite}
+        isOpen={!!auditSafeAccessSite}
+        onClose={() => setAuditSafeAccessSite(null)}
+      />
     </div>
   );
 };

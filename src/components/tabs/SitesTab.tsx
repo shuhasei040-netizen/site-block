@@ -11,10 +11,12 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
+  Globe,
 } from 'lucide-react';
 import { SiteItem } from '../../types/security';
 import { useSecurity } from '../../context/SecurityContext';
 import { SiteModal } from '../modals/SiteModal';
+import { SafeAccessModal } from '../modals/SafeAccessModal';
 
 export const SitesTab: React.FC = () => {
   const { sites, currentUser, deleteSite, scanSingleSite, scanAllSites } = useSecurity();
@@ -24,6 +26,7 @@ export const SitesTab: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [siteToEdit, setSiteToEdit] = useState<SiteItem | null>(null);
   const [selectedScanDetail, setSelectedScanDetail] = useState<SiteItem | null>(null);
+  const [selectedSafeAccessSite, setSelectedSafeAccessSite] = useState<SiteItem | null>(null);
 
   const canEditOrDelete = currentUser?.role === 'L2' || currentUser?.role === 'L3';
 
@@ -141,16 +144,17 @@ export const SitesTab: React.FC = () => {
                         <div className="text-[11px] text-[#8b96b8]">{site.category}</div>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5 font-mono text-[#8b96b8]">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 font-mono text-[#8b96b8]">
                           <span className="truncate max-w-xs">{site.url}</span>
-                          <a
-                            href={site.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#5b8cff] hover:text-white"
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSafeAccessSite(site)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#5b8cff]/15 hover:bg-[#5b8cff]/25 border border-[#5b8cff]/40 text-[#5b8cff] text-[11px] font-bold transition shrink-0 cursor-pointer shadow-sm active:scale-95"
+                            title="安全確認のためにこのサイトにアクセス"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
+                            <Globe className="w-3.5 h-3.5" />
+                            <span>安全確認アクセス</span>
+                          </button>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-white font-medium">{site.createdBy}</td>
@@ -340,12 +344,25 @@ export const SitesTab: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedScanDetail(null)}
-              className="w-full py-2 rounded-lg bg-[#161d2e] border border-[#2a3550] hover:bg-[#2a3550] text-xs font-semibold text-white transition cursor-pointer"
-            >
-              閉じる
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const s = selectedScanDetail;
+                  setSelectedScanDetail(null);
+                  setSelectedSafeAccessSite(s);
+                }}
+                className="flex-1 py-2 rounded-lg bg-gradient-to-r from-[#5b8cff] to-[#7c5bff] text-xs font-bold text-white hover:opacity-95 transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>このサイトへ安全確認アクセス</span>
+              </button>
+              <button
+                onClick={() => setSelectedScanDetail(null)}
+                className="px-4 py-2 rounded-lg bg-[#161d2e] border border-[#2a3550] hover:bg-[#2a3550] text-xs font-semibold text-white transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -355,6 +372,13 @@ export const SitesTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         siteToEdit={siteToEdit}
+      />
+
+      {/* Safe Verification Access Modal */}
+      <SafeAccessModal
+        site={selectedSafeAccessSite}
+        isOpen={!!selectedSafeAccessSite}
+        onClose={() => setSelectedSafeAccessSite(null)}
       />
     </div>
   );
